@@ -51,12 +51,12 @@ export class AppComponent implements OnInit {
   filterText = '';
   fileToUpload: File | null = null;
 
-  upload: TransferState = { loaded: 0, total: 0, inFlight: false };
-  download: TransferState = { loaded: 0, total: 0, inFlight: false };
+  uploadState: TransferState = { loaded: 0, total: 0, inFlight: false };
+  downloadState: TransferState = { loaded: 0, total: 0, inFlight: false };
 
   opsInfo = '';
   clearInfo = '';
-  stats = '0 Zeilen · 0 Spalten';
+  stats = '0 Zeilen / 0 Spalten';
   tableColumns: string[] = [];
   tableData: TableRow[] = [];
   schemaOutput = 'Not loaded yet.';
@@ -105,19 +105,19 @@ export class AppComponent implements OnInit {
   }
 
   get uploadWidth(): string {
-    return this.computeProgressWidth(this.upload);
+    return this.computeProgressWidth(this.uploadState);
   }
 
   get downloadWidth(): string {
-    return this.computeProgressWidth(this.download);
+    return this.computeProgressWidth(this.downloadState);
   }
 
   get uploadInfo(): string {
-    return this.formatProgressInfo(this.upload);
+    return this.formatProgressInfo(this.uploadState);
   }
 
   get downloadInfo(): string {
-    return this.formatProgressInfo(this.download);
+    return this.formatProgressInfo(this.downloadState);
   }
 
   handleDbChange(): void {
@@ -141,14 +141,14 @@ export class AppComponent implements OnInit {
 
   upload(): void {
     if (!this.fileToUpload) {
-      this.showToast('Bitte Datei auswählen', false);
+      this.showToast('Bitte Datei auswaehlen', false);
       return;
     }
 
     const formData = new FormData();
     formData.append('file', this.fileToUpload);
 
-    this.upload = { loaded: 0, total: this.fileToUpload.size, inFlight: true };
+    this.uploadState = { loaded: 0, total: this.fileToUpload.size, inFlight: true };
 
     this.http
       .post(this.resolveUrl(this.endpoints.upload(this.selectedDb)), formData, {
@@ -159,8 +159,8 @@ export class AppComponent implements OnInit {
       .subscribe({
         next: (event) => {
           if (event.type === HttpEventType.UploadProgress) {
-            this.upload.loaded = event.loaded ?? 0;
-            this.upload.total = event.total ?? this.fileToUpload?.size ?? 0;
+            this.uploadState.loaded = event.loaded ?? 0;
+            this.uploadState.total = event.total ?? this.fileToUpload?.size ?? 0;
           }
           if (event.type === HttpEventType.Response) {
             this.showToast('Upload erfolgreich');
@@ -175,7 +175,7 @@ export class AppComponent implements OnInit {
   }
 
   download(): void {
-    this.download = { loaded: 0, total: 0, inFlight: true };
+    this.downloadState = { loaded: 0, total: 0, inFlight: true };
 
     this.http
       .get(this.resolveUrl(this.endpoints.download(this.selectedDb)), {
@@ -187,19 +187,20 @@ export class AppComponent implements OnInit {
       .subscribe({
         next: (event) => {
           if (event.type === HttpEventType.DownloadProgress) {
-            this.download.loaded = event.loaded ?? 0;
-            this.download.total = event.total ?? 0;
+            this.downloadState.loaded = event.loaded ?? 0;
+            this.downloadState.total = event.total ?? 0;
           }
           if (event.type === HttpEventType.Response) {
             const blob = event.body;
             if (blob) {
               const link = document.createElement('a');
-              link.href = URL.createObjectURL(blob);
+              const href = URL.createObjectURL(blob);
+              link.href = href;
               link.download = `export-${this.selectedDb}.bin`;
               document.body.appendChild(link);
               link.click();
               link.remove();
-              setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+              setTimeout(() => URL.revokeObjectURL(href), 1500);
               this.showToast('Download bereit');
             }
             this.resetDownload();
@@ -214,7 +215,7 @@ export class AppComponent implements OnInit {
 
   relocateData(): void {
     if (this.relocate.from === this.relocate.to) {
-      this.showToast('Quelle und Ziel müssen unterschiedlich sein', false);
+      this.showToast('Quelle und Ziel muessen unterschiedlich sein', false);
       return;
     }
 
@@ -308,17 +309,18 @@ export class AppComponent implements OnInit {
 
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    const href = URL.createObjectURL(blob);
+    link.href = href;
     link.download = 'export.csv';
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    setTimeout(() => URL.revokeObjectURL(href), 1500);
     this.showToast('CSV erstellt');
   }
 
   clearSelected(): void {
-    if (!this.confirmAction(`Alle Telemetriedaten in "${this.selectedDb}" löschen?`)) {
+    if (!this.confirmAction(`Alle Telemetriedaten in "${this.selectedDb}" loeschen?`)) {
       return;
     }
 
@@ -334,17 +336,17 @@ export class AppComponent implements OnInit {
           this.lastData = [];
           this.updateTable([]);
           this.schemaPreview = this.buildPreview([]);
-          this.showToast('Telemetriedaten gelöscht');
+          this.showToast('Telemetriedaten geloescht');
         },
         error: (error) => {
-          this.clearInfo = 'Löschen fehlgeschlagen.';
-          this.handleHttpError('Fehler beim Löschen', error);
+          this.clearInfo = 'Loeschen fehlgeschlagen.';
+          this.handleHttpError('Fehler beim Loeschen', error);
         }
       });
   }
 
   clearAll(): void {
-    if (!this.confirmAction('Wirklich alle Telemetriedaten in allen Datenbanken löschen?')) {
+    if (!this.confirmAction('Wirklich alle Telemetriedaten in allen Datenbanken loeschen?')) {
       return;
     }
 
@@ -362,15 +364,15 @@ export class AppComponent implements OnInit {
                   .map(([key, value]) => `${key}: ${value}`)
                   .join(', ')
               : '';
-          this.clearInfo = parts ? `Cleared telemetry rows -> ${parts}` : 'Alle Telemetriedaten gelöscht';
+          this.clearInfo = parts ? `Cleared telemetry rows -> ${parts}` : 'Alle Telemetriedaten geloescht';
           this.lastData = [];
           this.updateTable([]);
           this.schemaPreview = this.buildPreview([]);
-          this.showToast('Alle Telemetriedaten gelöscht');
+          this.showToast('Alle Telemetriedaten geloescht');
         },
         error: (error) => {
-          this.clearInfo = 'Löschen aller Daten fehlgeschlagen.';
-          this.handleHttpError('Fehler beim Löschen (alle)', error);
+          this.clearInfo = 'Loeschen aller Daten fehlgeschlagen.';
+          this.handleHttpError('Fehler beim Loeschen (alle)', error);
         }
       });
   }
@@ -400,14 +402,14 @@ export class AppComponent implements OnInit {
     if (!rows.length) {
       this.tableColumns = [];
       this.tableData = [];
-      this.stats = '0 Zeilen · 0 Spalten';
+      this.stats = '0 Zeilen / 0 Spalten';
       return;
     }
 
     const columns = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
     this.tableColumns = columns;
     this.tableData = rows;
-    this.stats = `${rows.length} Zeilen · ${columns.length} Spalten`;
+    this.stats = `${rows.length} Zeilen / ${columns.length} Spalten`;
   }
 
   private buildPreview(rows: TableRow[]): string {
@@ -488,12 +490,12 @@ export class AppComponent implements OnInit {
   }
 
   private resetUpload(): void {
-    this.upload = { loaded: 0, total: 0, inFlight: false };
+    this.uploadState = { loaded: 0, total: 0, inFlight: false };
     this.fileToUpload = null;
   }
 
   private resetDownload(): void {
-    this.download = { loaded: 0, total: 0, inFlight: false };
+    this.downloadState = { loaded: 0, total: 0, inFlight: false };
   }
 
   private computeProgressWidth(state: TransferState): string {
