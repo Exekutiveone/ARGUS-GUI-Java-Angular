@@ -1,0 +1,49 @@
+server:
+  port: 9787   # Port, unter dem die Spring Boot Anwendung läuft
+
+spring:
+  datasource:
+    url: jdbc:sqlite:./device-data.db      # Standard-Datenbank: lokale SQLite-Datei
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1                 # nur eine Verbindung, da SQLite nicht parallelisiert
+  sql:
+    init:
+      mode: never                          # kein automatisches Schema-Init durch Spring
+  devtools:
+    restart:
+      enabled: false                       # DevTools-Neustart deaktiviert
+  jackson:
+    default-property-inclusion: non_null   # nur nicht-leere Felder in JSON aufnehmen
+
+# Konfiguration mehrerer Datenbanken
+dbs:
+  dbLocal:                                 # Lokale SQLite-DB
+    url: ${spring.datasource.url}
+    driver-class-name: ${spring.datasource.driver-class-name}
+    maximum-pool-size: 1
+    initialize-schema: true
+    schema: schema-sqlite.sql
+  db_pi:                                   # Raspberry Pi (MariaDB)
+    url: jdbc:mariadb://192.168.178.144:3306/jdbcrew_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ares
+    password: ares
+    driver-class-name: org.mariadb.jdbc.Driver
+    maximum-pool-size: 5
+    initialize-schema: true
+    schema: schema.sql
+  on_prem_serv:                            # On-Premises Server (PostgreSQL)
+    url: jdbc:postgresql://192.168.178.147:5432/on_prem_serv?sslmode=require
+    username: ares
+    password: ares
+    driver-class-name: org.postgresql.Driver
+    maximum-pool-size: 5
+    initialize-schema: true
+    schema: schema-postgres.sql
+
+# Gerätekonfiguration: Wenn base-url leer ist, läuft die jeweilige Service-Klasse im Mock-Modus
+devices:
+  pi:
+    base-url: ""     # Beispiel: http://raspberrypi.local:8081 (später eintragen)
+  server:
+    base-url: ""     # Beispiel: http://server.local:8081 (später eintragen)

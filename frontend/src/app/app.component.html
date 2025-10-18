@@ -1,0 +1,160 @@
+<header>
+  <h1>DB Web GUI</h1>
+  <span class="pill">API Base URL:</span>
+  <input
+    type="text"
+    [placeholder]="'e.g. ' + defaultOrigin"
+    [(ngModel)]="baseUrlInput"
+    style="max-width: 360px"
+  />
+  <button class="accent" style="width: auto" (click)="saveBaseUrl()">Save</button>
+  <span class="muted">{{ baseUrl }}</span>
+</header>
+
+<div class="container">
+  <section class="card">
+    <h2>1) Select Connection</h2>
+    <label for="dbSelect">Database</label>
+    <select id="dbSelect" [(ngModel)]="selectedDb" (change)="handleDbChange()">
+      <option *ngFor="let db of databases" [value]="db.id">
+        {{ db.label }}
+      </option>
+    </select>
+    <p class="muted" style="margin-top: 8px">
+      The GUI only sends HTTP requests to API endpoints.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>2) Upload → Selected DB</h2>
+    <label for="fileInput">Choose file</label>
+    <input id="fileInput" type="file" (change)="onFileSelected($event)" />
+    <div class="actions" style="margin-top: 10px">
+      <button id="btnUpload" (click)="upload()">Start upload</button>
+    </div>
+    <div class="progress" title="Upload progress">
+      <div class="bar" [style.width]="uploadWidth"></div>
+    </div>
+    <div class="muted">{{ uploadInfo }}</div>
+  </section>
+
+  <section class="card">
+    <h2>3) Download → Selected DB</h2>
+    <div class="actions">
+      <button id="btnDownload" (click)="download()">Start download</button>
+    </div>
+    <div class="progress" title="Download progress">
+      <div class="bar" [style.width]="downloadWidth"></div>
+    </div>
+    <div class="muted">{{ downloadInfo }}</div>
+  </section>
+
+  <section class="card">
+    <h2>4) Relocate &amp; Sync</h2>
+    <div class="row">
+      <div>
+        <label for="relFrom">From</label>
+        <select id="relFrom" [(ngModel)]="relocate.from">
+          <option *ngFor="let db of databases" [value]="db.id">
+            {{ db.label }}
+          </option>
+        </select>
+      </div>
+      <div>
+        <label for="relTo">To</label>
+        <select id="relTo" [(ngModel)]="relocate.to">
+          <option *ngFor="let db of databases" [value]="db.id">
+            {{ db.label }}
+          </option>
+        </select>
+      </div>
+    </div>
+    <div class="actions" style="margin-top: 10px">
+      <button id="btnRelocate" class="warn" (click)="relocateData()">Relocate</button>
+      <button id="btnSync" class="accent" (click)="sync()">Sync current DB</button>
+    </div>
+    <div class="muted" style="margin-top: 6px">{{ opsInfo }}</div>
+  </section>
+
+  <section class="card" style="grid-column: 1 / -1">
+    <h2>5) Overview / Analysis</h2>
+    <div class="grid-3">
+      <div>
+        <label for="filterText">Filter (optional)</label>
+        <input
+          id="filterText"
+          type="text"
+          placeholder="e.g. status=free"
+          [(ngModel)]="filterText"
+        />
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="btnLoadData" (click)="loadData()">Load data</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="btnExport" class="warn" (click)="exportCsv()">Export as CSV</button>
+      </div>
+    </div>
+    <div class="muted" style="margin-top: 8px">{{ stats }}</div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead *ngIf="tableColumns.length">
+          <tr>
+            <th *ngFor="let col of tableColumns">{{ col }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngIf="!tableData.length">
+            <td class="muted" [attr.colspan]="tableColumns.length || 1">Keine Daten</td>
+          </tr>
+          <tr *ngFor="let row of tableData">
+            <td *ngFor="let col of tableColumns">
+              {{ row[col] ?? '' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" style="grid-column: 1 / -1">
+    <h2>6) Show Schema</h2>
+    <div class="actions">
+      <button id="btnLoadSchema" (click)="loadSchema()">Load schema</button>
+    </div>
+    <pre class="code-block">{{ schemaOutput }}</pre>
+    <h3 style="margin-top: 12px">Data preview</h3>
+    <pre class="code-block">{{ schemaPreview }}</pre>
+  </section>
+
+  <section class="card" style="grid-column: 1 / -1">
+    <h2>7) Data Maintenance</h2>
+    <p class="muted">
+      Loescht alle Telemetriedaten. Geraete-/Sensor-Stammdaten bleiben erhalten.
+    </p>
+    <div class="grid-3">
+      <div>
+        <label>&nbsp;</label>
+        <button id="btnClearSelected" class="warn" (click)="clearSelected()">Clear selected DB</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="btnClearAll" class="warn" (click)="clearAll()">Clear all DBs</button>
+      </div>
+    </div>
+    <div class="muted" style="margin-top: 8px">{{ clearInfo }}</div>
+  </section>
+</div>
+
+<div class="toast-container">
+  <div
+    class="toast"
+    *ngFor="let toast of toasts"
+    [class.ok]="toast.type === 'ok'"
+    [class.error]="toast.type === 'error'"
+  >
+    {{ toast.message }}
+  </div>
+</div>
