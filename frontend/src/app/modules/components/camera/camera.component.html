@@ -1,0 +1,52 @@
+<div class="camera-grid">
+  <div
+    class="primary-feed card-surface"
+    *ngIf="primaryFeed; else noFeed"
+  >
+    <div class="rec-indicator">
+      <span class="dot"></span>
+      REC
+    </div>
+    <div class="video-frame">
+      <video
+        *ngIf="primaryFeed.streamUrl; else placeholder"
+        [src]="primaryFeed.streamUrl"
+        autoplay
+        muted
+        playsinline
+        loop
+      ></video>
+      <ng-template #placeholder>
+        <div class="video-placeholder">
+          <span>{{ primaryFeed.label }}</span>
+          <small>Stream wird aufgebaut …</small>
+        </div>
+      </ng-template>
+    </div>
+    <div class="feed-label">{{ primaryFeed.label }}</div>
+  </div>
+
+  <ng-template #noFeed>
+    <div class="primary-feed card-surface">
+      <div class="video-placeholder">Keine Kamera verbunden</div>
+    </div>
+  </ng-template>
+
+  <div class="secondary-feeds">
+    @for (feed of secondaryFeeds; track feed.id) {
+      <button
+        type="button"
+        class="secondary card-surface glow-toggle"
+        (click)="selectFeed(feed)"
+      >
+        <div class="overlay">{{ feed.label }}</div>
+        <div class="secondary-frame">
+          <video *ngIf="feed.streamUrl; else secondaryPlaceholder" [src]="feed.streamUrl" muted loop></video>
+        </div>
+        <ng-template #secondaryPlaceholder>
+          <div class="video-placeholder">Feed verfügbar</div>
+        </ng-template>
+      </button>
+    }
+  </div>
+</div>

@@ -1,0 +1,43 @@
+<div class="dashboard-shell">
+  <header>
+    <div class="title">
+      <h1>ARGUS Command Center</h1>
+      <p>Live-Steuerung &bull; Telemetrie &bull; Video</p>
+    </div>
+  </header>
+
+  <ng-container *ngIf="telemetry$ | async as telemetry">
+    <div class="dashboard-grid">
+      <aside class="left-column">
+        <div class="panel map-panel">
+          <app-map [position]="telemetry.gps"></app-map>
+        </div>
+        <div class="panel compass-panel">
+          <app-compass [heading]="telemetry.heading"></app-compass>
+        </div>
+        <div class="panel model-panel">
+          <app-car-model [orientation]="telemetry.orientation"></app-car-model>
+        </div>
+        <div class="panel tasks-panel">
+          <app-tasks></app-tasks>
+        </div>
+      </aside>
+
+      <section class="camera-area">
+        <app-camera
+          [primaryFeed]="primaryFeed$ | async"
+          [secondaryFeeds]="(secondaryFeeds$ | async) ?? []"
+          (feedSelected)="handleFeedSelected($event)"
+        ></app-camera>
+      </section>
+
+      <section class="controls-area">
+        <app-controls></app-controls>
+      </section>
+
+      <section class="sensors-area">
+        <app-sensors [telemetry]="telemetry"></app-sensors>
+      </section>
+    </div>
+  </ng-container>
+</div>

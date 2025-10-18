@@ -1,27 +1,31 @@
-# Frontend
+# ARGUS Web UI (Angular)
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 18.2.21.
+Angular 17 dashboard for the ARGUS remote vehicle control system. The application delivers a dark-mode operator console with live telemetry, camera feeds, map, compass, 3D model, task overview and keyboard/gamepad control visualisations.
 
-## Development server
+The Angular build is served directly by the Spring Boot backend (`src/main/resources/static`). Any production build will overwrite the static assets that Spring Boot exposes.
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+## Development
 
-## Code scaffolding
+- `npm install` – install dependencies
+- `npm start` – run the Angular dev server on <http://localhost:4200>
+- `npm run lint` / `npm test` – optional quality gates (tests currently limited to generated specs)
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+### Building & syncing with Spring Boot
 
-## Build
+```bash
+npm run build
+```
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+The command compiles the Angular app in production mode and writes the bundle into `../src/main/resources/static`. After building you can start the Spring Boot backend and access the SPA at <http://localhost:4800>.
 
-## Running unit tests
+## Project structure highlights
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+- `src/app/modules/auth` – login module with reactive form and authentication service integration
+- `src/app/modules/dashboard` – dashboard shell that orchestrates all feature components
+- `src/app/modules/components` – reusable feature components (map, compass, car model, camera, controls, sensors, tasks)
+- `src/app/services` – WebSocket/REST integrations for telemetry, video, control and authentication
+- `src/app/models` – shared TypeScript interfaces used across modules
 
-## Running end-to-end tests
+## Further CLI help
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+For scaffolding or advanced CLI usage see the [Angular CLI docs](https://angular.io/cli).

@@ -1,0 +1,8 @@
+<div class="car-model card-surface">
+  <canvas #canvas class="model-canvas"></canvas>
+  <div class="telemetry-overlay">
+    <div>Roll: {{ orientationState.roll | number: '1.0-0' }}°</div>
+    <div>Pitch: {{ orientationState.pitch | number: '1.0-0' }}°</div>
+    <div>Yaw: {{ orientationState.yaw | number: '1.0-0' }}°</div>
+  </div>
+</div>

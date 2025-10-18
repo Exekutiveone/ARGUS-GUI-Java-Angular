@@ -1,0 +1,71 @@
+.tasks {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 1rem;
+  height: 100%;
+  overflow: hidden;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    letter-spacing: 0.18rem;
+    text-transform: uppercase;
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.8rem;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  li {
+    background: rgba(30, 30, 30, 0.75);
+    border-radius: 12px;
+    padding: 0.9rem;
+    display: grid;
+    gap: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .title {
+      font-weight: 600;
+      letter-spacing: 0.08rem;
+    }
+
+    .badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      letter-spacing: 0.1rem;
+      text-transform: uppercase;
+      background: rgba(0, 122, 204, 0.18);
+      border: 1px solid rgba(0, 122, 204, 0.35);
+    }
+
+    .badge[data-priority='HIGH'] {
+      background: rgba(255, 77, 79, 0.2);
+      border-color: rgba(255, 77, 79, 0.4);
+    }
+
+    .badge[data-priority='LOW'] {
+      background: rgba(56, 142, 60, 0.2);
+      border-color: rgba(56, 142, 60, 0.4);
+    }
+
+    p {
+      margin: 0;
+      color: var(--color-text-muted);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+  }
+}

@@ -1,0 +1,42 @@
+<div class="login-shell">
+  <div class="login-panel card-surface">
+    <div class="brand">
+      <div class="logo">ARGUS</div>
+      <p>Remote Vehicle Control</p>
+    </div>
+
+    <form [formGroup]="loginForm" (ngSubmit)="submit()">
+      <label for="username">Benutzername</label>
+      <input
+        id="username"
+        type="text"
+        formControlName="username"
+        [class.invalid]="loginForm.controls.username.invalid && loginForm.controls.username.touched"
+        placeholder="z. B. pilot01"
+        autocomplete="username"
+      />
+
+      <label for="password">Passwort</label>
+      <input
+        id="password"
+        type="password"
+        formControlName="password"
+        [class.invalid]="loginForm.controls.password.invalid && loginForm.controls.password.touched"
+        placeholder="••••••••"
+        autocomplete="current-password"
+      />
+
+      @if (errorMessage) {
+        <div class="error">{{ errorMessage }}</div>
+      }
+
+      <button class="glow-toggle" type="submit" [disabled]="isLoading">
+        @if (isLoading) {
+          <span class="spinner"></span>
+        } @else {
+          Login
+        }
+      </button>
+    </form>
+  </div>
+</div>
