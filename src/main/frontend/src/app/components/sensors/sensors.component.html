@@ -1,0 +1,39 @@
+<div class="sensors-panel">
+  <div class="overview">
+    <div class="metric">
+      <span>Geschwindigkeit</span>
+      <strong>{{ speed | number:'1.0-0' }} / 60 km/h</strong>
+    </div>
+    <div class="metric">
+      <span>Akku</span>
+      <strong>{{ battery | number:'1.0-0' }}%</strong>
+      <div class="battery">
+        <div class="battery-fill" [style.width.%]="battery"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="temps" *ngIf="temperatures.length > 0">
+    <div class="temp" *ngFor="let temp of temperatures">
+      <span>{{ temp.label }}</span>
+      <strong>{{ temp.value | number:'1.0-1' }}°C</strong>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart">
+      <header>
+        <h3>Throttle</h3>
+        <span></span>
+      </header>
+      <canvas #accCanvas></canvas>
+    </div>
+    <div class="chart">
+      <header>
+        <h3>Brake</h3>
+        <span></span>
+      </header>
+      <canvas #brakeCanvas></canvas>
+    </div>
+  </div>
+</div>

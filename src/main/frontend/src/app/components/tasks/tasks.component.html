@@ -1,0 +1,28 @@
+<div class="tasks-panel">
+  <header>
+    <h3>Aufgaben</h3>
+    <span>{{ tasks.length }} aktiv</span>
+  </header>
+
+  <div class="list" *ngIf="tasks.length; else empty">
+    <div
+      class="task"
+      *ngFor="let task of tasks"
+      (click)="selectTask(task)"
+      [class.active]="task.id === highlightId"
+    >
+      <div class="info">
+        <span class="status" [class.done]="task.status === 'done'" [class.running]="task.status === 'running'"></span>
+        <div>
+          <h4>{{ task.title }}</h4>
+          <p *ngIf="task.description">{{ task.description }}</p>
+        </div>
+      </div>
+      <span class="tag">{{ task.status || 'pending' }}</span>
+    </div>
+  </div>
+
+  <ng-template #empty>
+    <div class="empty">Keine Aufgaben vorhanden.</div>
+  </ng-template>
+</div>

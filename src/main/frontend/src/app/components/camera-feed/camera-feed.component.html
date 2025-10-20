@@ -1,0 +1,12 @@
+<div class="feed-card" (click)="onActivate()" tabindex="0" role="button">
+  <div class="frame">
+    <video *ngIf="feed?.streamUrl; else placeholder" [src]="feed?.streamUrl" muted playsinline></video>
+    <ng-template #placeholder>
+      <div class="video-placeholder">{{ feed?.placeholder || feed?.name }}</div>
+    </ng-template>
+  </div>
+  <footer>
+    <span>{{ feed?.name }}</span>
+    <button type="button" (click)="onActivate(); $event.stopPropagation()">Anzeigen</button>
+  </footer>
+</div>

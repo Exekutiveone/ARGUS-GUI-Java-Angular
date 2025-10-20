@@ -1,0 +1,222 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.controls-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 18px;
+  background: #1e1e1e;
+  border: 1px solid rgba(0, 122, 204, 0.1);
+  color: #e0e0e0;
+}
+
+.mode-switches {
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.25rem;
+  color: rgba(224, 224, 224, 0.6);
+}
+
+.options {
+  display: flex;
+  gap: 0.75rem;
+
+  button {
+    padding: 0.6rem 1.4rem;
+    border-radius: 999px;
+    background: #2c2c2c;
+    border: 1px solid rgba(0, 122, 204, 0.2);
+    color: rgba(224, 224, 224, 0.75);
+    text-transform: uppercase;
+    letter-spacing: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+
+    &:hover {
+      border-color: rgba(0, 122, 204, 0.4);
+    }
+
+    &.active {
+      color: #ffffff;
+      border-color: rgba(0, 122, 204, 0.75);
+      box-shadow: 0 0 18px rgba(0, 122, 204, 0.45);
+      background: radial-gradient(circle at center, rgba(0, 122, 204, 0.4), rgba(44, 44, 44, 0.85));
+    }
+  }
+}
+
+.feedback {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  position: relative;
+}
+
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 5rem;
+  align-items: center;
+}
+
+.keys-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.key {
+  width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #242424;
+  border: 1px solid rgba(224, 224, 224, 0.08);
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: 0.2rem;
+  text-transform: uppercase;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease;
+
+  &.active {
+    transform: translateY(-4px);
+    border-color: rgba(0, 122, 204, 0.75);
+    box-shadow: 0 10px 20px rgba(0, 122, 204, 0.35);
+    background: rgba(0, 122, 204, 0.35);
+  }
+
+  &.placeholder {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.legend {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(224, 224, 224, 0.55);
+  letter-spacing: 0.2rem;
+  text-transform: uppercase;
+}
+
+.bars {
+  position: absolute;
+  right: -1rem;
+  bottom: 0rem;
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.5rem;
+
+  .bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 72px;
+
+    span {
+      font-size: 0.7rem;
+      letter-spacing: 0.18rem;
+      text-transform: uppercase;
+      color: rgba(224, 224, 224, 0.6);
+    }
+
+    small {
+      font-size: 0.75rem;
+      color: rgba(224, 224, 224, 0.75);
+      letter-spacing: 0.08rem;
+    }
+  }
+}
+
+.track {
+  position: relative;
+  width: 18px;
+  height: 160px;
+  border-radius: 10px;
+  background: rgba(224, 224, 224, 0.08);
+  overflow: hidden;
+  border: 1px solid rgba(224, 224, 224, 0.08);
+}
+
+.fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 10px;
+  transition: height 0.1s ease;
+
+  &.throttle {
+    background: linear-gradient(180deg, rgba(0, 122, 204, 0.75), rgba(0, 122, 204, 0.35));
+  }
+
+  &.brake {
+    background: linear-gradient(180deg, rgba(255, 88, 88, 0.75), rgba(255, 88, 88, 0.35));
+  }
+}
+
+.status {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 90%;
+  font-size: 0.8rem;
+  letter-spacing: 0.15rem;
+  text-transform: uppercase;
+  color: rgba(224, 224, 224, 0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(120, 120, 120, 0.5);
+  box-shadow: 0 0 10px rgba(120, 120, 120, 0.5);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+
+  &.online {
+    background: rgba(0, 200, 140, 0.9);
+    box-shadow: 0 0 10px rgba(0, 200, 140, 0.7);
+  }
+}
+
+@media (max-width: 1400px) {
+  .feedback {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bars {
+    justify-self: center;
+  }
+
+  .status {
+    justify-self: center;
+  }
+}

@@ -1,0 +1,31 @@
+/* Global styles for Argus dashboard */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #121212;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+.leaflet-container {
+  background: #1e1e1e !important;
+}

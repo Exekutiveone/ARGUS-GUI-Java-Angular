@@ -1,0 +1,11 @@
+<div class="model-wrapper">
+  <div #canvasHost class="canvas"></div>
+  <div class="overlay">
+    <span>Gyro</span>
+    <div class="angles">
+      <div><label>Roll</label><strong>{{ orientation.roll | number:'1.0-0' }}°</strong></div>
+      <div><label>Pitch</label><strong>{{ orientation.pitch | number:'1.0-0' }}°</strong></div>
+      <div><label>Yaw</label><strong>{{ orientation.yaw | number:'1.0-0' }}°</strong></div>
+    </div>
+  </div>
+</div>

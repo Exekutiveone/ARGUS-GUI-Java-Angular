@@ -1,0 +1,8 @@
+<div class="map-wrapper">
+  <div #mapContainer class="map"></div>
+  <div class="meta">
+    <span>GPS</span>
+    <strong>{{ latitude | number:'1.4-4' }}, {{ longitude | number:'1.4-4' }}</strong>
+    <small *ngIf="timestamp">Stand: {{ timestamp }}</small>
+  </div>
+</div>

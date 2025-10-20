@@ -1,0 +1,28 @@
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="branding">
+      <div class="logo">ARGUS</div>
+      <p class="tagline">Remote Vehicle Control</p>
+    </div>
+
+    <form [formGroup]="loginForm" (ngSubmit)="submit()" novalidate>
+      <label for="username">Benutzername</label>
+      <input id="username" type="text" formControlName="username" placeholder="admin" />
+      <div class="error" *ngIf="loginForm.controls.username.touched && loginForm.controls.username.invalid">
+        Bitte gib einen Benutzernamen ein.
+      </div>
+
+      <label for="password">Passwort</label>
+      <input id="password" type="password" formControlName="password" placeholder="1234" />
+      <div class="error" *ngIf="loginForm.controls.password.touched && loginForm.controls.password.invalid">
+        Bitte gib ein Passwort ein.
+      </div>
+
+      <div class="error" *ngIf="loginError">{{ loginError }}</div>
+
+      <button type="submit" [disabled]="isLoading">
+        {{ isLoading ? 'Anmelden…' : 'Login' }}
+      </button>
+    </form>
+  </div>
+</div>

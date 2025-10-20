@@ -1,0 +1,69 @@
+<div class="controls-panel">
+  <div class="mode-switches">
+    <div class="mode-group">
+      <span class="label">Fahrmodus</span>
+      <div class="options">
+        <button
+          *ngFor="let mode of driveModes"
+          type="button"
+          [class.active]="mode === driveMode"
+          (click)="selectDriveMode(mode)"
+        >
+          {{ mode }}
+        </button>
+      </div>
+    </div>
+
+    <div class="mode-group">
+      <span class="label">Lenkmodus</span>
+      <div class="options">
+        <button
+          *ngFor="let mode of steeringModes"
+          type="button"
+          [class.active]="mode === steeringMode"
+          (click)="selectSteeringMode(mode)"
+        >
+          {{ mode }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="feedback">
+    <div class="keyboard">
+      <div class="keys-row">
+        <div class="key placeholder"></div>
+        <div class="key" [class.active]="isActive('w')">W</div>
+        <div class="key placeholder"></div>
+      </div>
+      <div class="keys-row">
+        <div class="key" [class.active]="isActive('a')">A</div>
+        <div class="key" [class.active]="isActive('s')">S</div>
+        <div class="key" [class.active]="isActive('d')">D</div>
+      </div>
+      <div class="legend">Tastatursteuerung</div>
+    </div>
+
+    <div class="bars">
+      <div class="bar">
+        <span>Throttle</span>
+        <div class="track">
+          <div class="fill throttle" [style.height.%]="throttleLevel"></div>
+        </div>
+        <small>{{ throttleLevel }}%</small>
+      </div>
+      <div class="bar">
+        <span>Bremse</span>
+        <div class="track">
+          <div class="fill brake" [style.height.%]="brakeLevel"></div>
+        </div>
+        <small>{{ brakeLevel }}%</small>
+      </div>
+    </div>
+
+    <div class="status">
+      <span class="dot" [class.online]="controllerConnected"></span>
+      {{ controllerConnected ? 'Controller verbunden' : 'Controller nicht verbunden' }}
+    </div>
+  </div>
+</div>

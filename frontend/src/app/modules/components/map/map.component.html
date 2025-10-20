@@ -1,9 +1,0 @@
-<div class="map-wrapper card-surface">
-  <div #mapContainer class="map-canvas"></div>
-  @if (currentPosition) {
-    <div class="map-overlay">
-      <span>Lat: {{ currentPosition.lat | number: '1.4-4' }}</span>
-      <span>Lng: {{ currentPosition.lng | number: '1.4-4' }}</span>
-    </div>
-  }
-</div>

@@ -1,0 +1,25 @@
+<div class="camera-layout" *ngIf="mainFeed as feed">
+  <div class="main-feed">
+    <div class="video-wrapper">
+      <video *ngIf="feed.streamUrl; else placeholder" [src]="feed.streamUrl" autoplay muted playsinline></video>
+      <ng-template #placeholder>
+        <div class="video-placeholder">{{ feed.placeholder || feed.name }}</div>
+      </ng-template>
+      <div class="rec-indicator" *ngIf="recActive">
+        <span class="dot"></span>
+        REC
+      </div>
+    </div>
+    <div class="caption">
+      <strong>{{ feed.name }}</strong>
+      <span>Live</span>
+    </div>
+  </div>
+  <div class="secondary-column" *ngIf="secondaryFeeds?.length">
+    <app-camera-feed
+      *ngFor="let alt of secondaryFeeds | slice:0:2"
+      [feed]="alt"
+      (activate)="handleSelect($event)"
+    ></app-camera-feed>
+  </div>
+</div>

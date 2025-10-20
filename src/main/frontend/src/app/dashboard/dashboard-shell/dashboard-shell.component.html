@@ -1,0 +1,74 @@
+<div class="dashboard">
+  <header class="topbar">
+    <div>
+      <h1>ARGUS Command Center</h1>
+      <span>Remote Vehicle Dashboard</span>
+    </div>
+    <button type="button" (click)="logout()">Logout</button>
+  </header>
+
+  <main class="layout" *ngIf="telemetry as data; else loading">
+    <section class="panel map">
+      <app-map
+        [latitude]="data.position.lat"
+        [longitude]="data.position.lon"
+        [timestamp]="data.timestamp"
+      ></app-map>
+    </section>
+
+    <section class="panel compass">
+      <app-compass [heading]="heading"></app-compass>
+    </section>
+
+    <section class="panel model">
+      <app-car-model [orientation]="orientation"></app-car-model>
+    </section>
+
+    <section class="panel camera">
+      <app-camera
+        *ngIf="mainFeed; else cameraFallback"
+        [mainFeed]="mainFeed"
+        [secondaryFeeds]="secondaryFeeds"
+        [recActive]="true"
+        (selectFeed)="selectCamera($event)"
+      ></app-camera>
+    </section>
+
+    <section class="panel tasks">
+      <app-tasks [tasks]="tasks"></app-tasks>
+    </section>
+
+    <section class="panel controls">
+      <app-controls
+        [pressedKeys]="pressedKeys"
+        [throttleLevel]="throttleLevel"
+        [brakeLevel]="brakeLevel"
+        [controllerConnected]="controllerConnected"
+        [driveModes]="driveModes"
+        [steeringModes]="steeringModes"
+        [driveMode]="driveMode"
+        [steeringMode]="steeringMode"
+        (driveModeChange)="changeDriveMode($event)"
+        (steeringModeChange)="changeSteeringMode($event)"
+      ></app-controls>
+    </section>
+
+    <section class="panel sensors">
+      <app-sensors
+        [temperatures]="data.temperatures"
+        [accelerationSeries]="data.acceleration"
+        [brakeSeries]="data.braking"
+        [speed]="data.speed"
+        [battery]="data.battery"
+      ></app-sensors>
+    </section>
+  </main>
+
+  <ng-template #loading>
+    <div class="loading">Telemetry wird initialisiert…</div>
+  </ng-template>
+</div>
+
+<ng-template #cameraFallback>
+  <div class="camera-placeholder">Kamerafeeds werden geladen…</div>
+</ng-template>

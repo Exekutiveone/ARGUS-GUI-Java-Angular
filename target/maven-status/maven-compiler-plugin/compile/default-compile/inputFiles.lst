@@ -1,19 +1,19 @@
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/DeviceBridgeApplication.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/config/SpaRoutingConfig.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/config/WebSocketConfig.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/controller/AuthController.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/controller/ControlController.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/controller/TelemetryController.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/AuthRequest.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/AuthResponse.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/CameraAdjustment.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/ControlCommand.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/GpsCoordinate.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/ModeChangeRequest.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/Orientation.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/SteeringModeRequest.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/TelemetrySnapshot.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/TemperatureReading.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/service/TelemetryGenerator.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/websocket/ControlWebSocketHandler.java
-/Users/marinafarias/Desktop/Webprogrammierung/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/websocket/TelemetryWebSocketHandler.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/DeviceBridgeApplication.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/config/SpaRoutingConfig.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/config/WebSocketConfig.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/controller/AuthController.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/controller/ControlController.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/controller/TelemetryController.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/AuthRequest.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/AuthResponse.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/CameraAdjustment.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/ControlCommand.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/GpsCoordinate.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/ModeChangeRequest.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/Orientation.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/SteeringModeRequest.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/TelemetrySnapshot.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/model/TemperatureReading.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/service/TelemetryGenerator.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/websocket/ControlWebSocketHandler.java
+/Users/marcrahman/Static Site Argus/ARGUS/ARGUS-GUI-Java-Angular/src/main/java/de/jdbcrew/devicebridge/websocket/TelemetryWebSocketHandler.java
