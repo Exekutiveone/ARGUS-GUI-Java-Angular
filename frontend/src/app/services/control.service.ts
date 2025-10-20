@@ -30,12 +30,16 @@ interface ControlState {
   steeringMode: SteeringMode;
 }
 
+type ControlKeySource = 'keyboard' | 'gamepad';
+
 @Injectable({
   providedIn: 'root'
 })
 export class ControlService implements OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private controlSocket$?: WebSocketSubject<unknown>;
+  private readonly activeKeySources = new Map<string, Set<ControlKeySource>>();
+  private readonly trackedKeys: ReadonlyArray<string> = ['w', 'a', 's', 'd'];
 
   private readonly controlState$ = new BehaviorSubject<ControlState>({
     throttle: 0,
@@ -58,19 +62,11 @@ export class ControlService implements OnDestroy {
   }
 
   setKeyboardKeyState(key: string, isActive: boolean): void {
-    const lowerKey = key.toLowerCase();
-    const state = this.cloneState();
-    if (isActive) {
-      state.activeKeys.add(lowerKey);
-    } else {
-      state.activeKeys.delete(lowerKey);
-    }
-    this.controlState$.next(state);
-    this.dispatchControlCommand({
-      source: 'keyboard',
-      command: lowerKey,
-      timestamp: Date.now()
-    });
+    this.setKeyState('keyboard', key, isActive);
+  }
+
+  setGamepadKeyState(key: string, isActive: boolean): void {
+    this.setKeyState('gamepad', key, isActive);
   }
 
   setThrottle(throttle: number): void {
@@ -169,6 +165,45 @@ export class ControlService implements OnDestroy {
     } catch {
       this.controlSocket$ = undefined;
     }
+  }
+
+  private setKeyState(
+    source: ControlKeySource,
+    key: string,
+    isActive: boolean
+  ): void {
+    const lowerKey = key.toLowerCase();
+    if (!this.trackedKeys.includes(lowerKey)) {
+      return;
+    }
+
+    const sources = new Set(this.activeKeySources.get(lowerKey) ?? []);
+    const alreadyActive = sources.has(source);
+    if (isActive === alreadyActive) {
+      return;
+    }
+
+    if (isActive) {
+      sources.add(source);
+      this.activeKeySources.set(lowerKey, sources);
+    } else {
+      sources.delete(source);
+      if (sources.size === 0) {
+        this.activeKeySources.delete(lowerKey);
+      } else {
+        this.activeKeySources.set(lowerKey, sources);
+      }
+    }
+
+    const state = this.cloneState();
+    state.activeKeys = new Set(this.activeKeySources.keys());
+    this.controlState$.next(state);
+
+    this.dispatchControlCommand({
+      source,
+      command: lowerKey,
+      timestamp: Date.now()
+    });
   }
 
   private cloneState(): ControlState {

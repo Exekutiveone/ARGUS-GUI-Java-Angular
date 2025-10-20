@@ -30,6 +30,7 @@ export class ControlsComponent implements OnInit, OnDestroy {
   private stateSubscription?: Subscription;
   private gamepadFrameId?: number;
   private connectedGamepadIndex?: number;
+  private activeGamepadKeys = new Set<string>();
 
   constructor(private readonly controlService: ControlService) {}
 
@@ -143,6 +144,9 @@ export class ControlsComponent implements OnInit, OnDestroy {
       }
       this.controlService.setThrottle(0);
       this.controlService.setBrake(0);
+      if (this.activeGamepadKeys.size > 0) {
+        this.syncGamepadKeys(new Set());
+      }
     }
   };
 
@@ -159,12 +163,50 @@ export class ControlsComponent implements OnInit, OnDestroy {
         const brake = this.normalizeTrigger(gamepad.buttons[6]?.value ?? 0);
         this.controlService.setThrottle(throttle);
         this.controlService.setBrake(brake);
+        const directionalKeys = this.detectDirectionalKeys(gamepad);
+        this.syncGamepadKeys(directionalKeys);
+      } else if (this.activeGamepadKeys.size > 0) {
+        this.syncGamepadKeys(new Set());
       }
 
       this.gamepadFrameId = requestAnimationFrame(poll);
     };
 
     this.gamepadFrameId = requestAnimationFrame(poll);
+  }
+
+  private detectDirectionalKeys(gamepad: Gamepad): Set<string> {
+    const keys = new Set<string>();
+    const horizontal = gamepad.axes[0] ?? 0;
+    const vertical = gamepad.axes[1] ?? 0;
+    const threshold = 0.4;
+
+    if (vertical < -threshold || gamepad.buttons[12]?.pressed) {
+      keys.add('w');
+    }
+    if (vertical > threshold || gamepad.buttons[13]?.pressed) {
+      keys.add('s');
+    }
+    if (horizontal < -threshold || gamepad.buttons[14]?.pressed) {
+      keys.add('a');
+    }
+    if (horizontal > threshold || gamepad.buttons[15]?.pressed) {
+      keys.add('d');
+    }
+
+    return keys;
+  }
+
+  private syncGamepadKeys(nextKeys: Set<string>): void {
+    const trackedKeys: Array<'w' | 'a' | 's' | 'd'> = ['w', 'a', 's', 'd'];
+    for (const key of trackedKeys) {
+      const wasActive = this.activeGamepadKeys.has(key);
+      const isActive = nextKeys.has(key);
+      if (wasActive !== isActive) {
+        this.controlService.setGamepadKeyState(key, isActive);
+      }
+    }
+    this.activeGamepadKeys = new Set(nextKeys);
   }
 
   private normalizeTrigger(value: number): number {
