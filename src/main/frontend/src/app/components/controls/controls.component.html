@@ -30,40 +30,71 @@
   </div>
 
   <div class="feedback">
-    <div class="keyboard">
-      <div class="keys-row">
-        <div class="key placeholder"></div>
-        <div class="key" [class.active]="isActive('w')">W</div>
-        <div class="key placeholder"></div>
-      </div>
-      <div class="keys-row">
-        <div class="key" [class.active]="isActive('a')">A</div>
-        <div class="key" [class.active]="isActive('s')">S</div>
-        <div class="key" [class.active]="isActive('d')">D</div>
-      </div>
-      <div class="legend">Tastatursteuerung</div>
-    </div>
-
-    <div class="bars">
-      <div class="bar">
-        <span>Throttle</span>
-        <div class="track">
-          <div class="fill throttle" [style.height.%]="throttleLevel"></div>
-        </div>
-        <small>{{ throttleLevel }}%</small>
-      </div>
-      <div class="bar">
-        <span>Bremse</span>
-        <div class="track">
-          <div class="fill brake" [style.height.%]="brakeLevel"></div>
-        </div>
-        <small>{{ brakeLevel }}%</small>
-      </div>
-    </div>
-
     <div class="status">
       <span class="dot" [class.online]="controllerConnected"></span>
       {{ controllerConnected ? 'Controller verbunden' : 'Controller nicht verbunden' }}
+    </div>
+
+    <div class="gamepad">
+      <div class="sticks">
+        <div class="stick">
+          <div class="ring">
+            <div class="stick-indicator" [ngStyle]="stickStyle(leftStick)"></div>
+            <div class="center"></div>
+          </div>
+          <small>Linker Stick</small>
+        </div>
+        <div class="stick">
+          <div class="ring">
+            <div class="stick-indicator" [ngStyle]="stickStyle(rightStick)"></div>
+            <div class="center"></div>
+          </div>
+          <small>Rechter Stick</small>
+        </div>
+      </div>
+
+      <div class="triggers">
+        <div class="trigger">
+          <span class="trigger-label">L2</span>
+          <div class="trigger-track">
+            <div class="trigger-fill brake" [style.width.%]="brakeLevel"></div>
+          </div>
+          <small>{{ brakeLevel }}%</small>
+        </div>
+        <div class="trigger">
+          <span class="trigger-label">R2</span>
+          <div class="trigger-track">
+            <div class="trigger-fill throttle" [style.width.%]="throttleLevel"></div>
+          </div>
+          <small>{{ throttleLevel }}%</small>
+        </div>
+      </div>
+
+      <div class="light-status">
+        <div class="light" [class.active]="ledFrontActive">
+          <span class="indicator" [class.on]="ledFrontActive"></span>
+          <span>LED Front</span>
+        </div>
+        <div class="light" [class.active]="ledSweepActive">
+          <span class="indicator" [class.on]="ledSweepActive"></span>
+          <span>LED Schwenk</span>
+        </div>
+        <div class="light" [class.active]="laserFrontActive">
+          <span class="indicator laser" [class.on]="laserFrontActive"></span>
+          <span>Laser Front</span>
+        </div>
+        <div class="light" [class.active]="laserSweepActive">
+          <span class="indicator laser" [class.on]="laserSweepActive"></span>
+          <span>Laser Schwenk</span>
+        </div>
+        <div class="intensity">
+          <span>LED Intensität</span>
+          <div class="intensity-bar">
+            <div class="intensity-fill" [style.width.%]="ledIntensity"></div>
+          </div>
+          <small>{{ ledIntensity }}%</small>
+        </div>
+      </div>
     </div>
   </div>
 </div>

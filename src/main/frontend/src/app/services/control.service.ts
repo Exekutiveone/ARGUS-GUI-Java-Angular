@@ -1,22 +1,25 @@
 import { Injectable } from '@angular/core';
 
-export interface DriveCommand {
+export interface DriveCommand extends Record<string, unknown> {
   keys: string[];
   driveMode: string;
   steeringMode: string;
 }
 
-export interface GamepadCommand {
+export interface GamepadCommand extends Record<string, unknown> {
   throttle: number;
   brake: number;
-  buttons: boolean[];
+  steering: number;
+  forward?: number;
+  cameraX?: number;
+  cameraY?: number;
 }
 
 @Injectable({
   providedIn: 'root',
 })
 export class ControlService {
-  private readonly controlEndpoint = 'ws://localhost:8080/ws/control';
+  private readonly controlEndpoint = 'ws://localhost:4800/ws/control';
   private socket?: WebSocket;
 
   private ensureConnection(): void {
@@ -35,39 +38,63 @@ export class ControlService {
   }
 
   sendDriveCommand(command: DriveCommand): void {
-    this.ensureConnection();
-    const payload = JSON.stringify({ type: 'drive', ...command });
-    this.dispatch(payload);
+    this.sendMessage('drive', command);
   }
 
   sendGamepadCommand(command: GamepadCommand): void {
-    this.ensureConnection();
-    const payload = JSON.stringify({ type: 'gamepad', ...command });
-    this.dispatch(payload);
+    this.sendMessage('gamepad', command);
+  }
+
+  sendCameraVector(x: number, y: number): void {
+    this.sendMessage('camera-vector', { x, y });
   }
 
   setDriveMode(mode: string): void {
-    this.ensureConnection();
-    const payload = JSON.stringify({ type: 'mode', mode });
-    this.dispatch(payload);
+    this.sendMessage('mode', { mode });
+  }
+
+  cycleDriveMode(): void {
+    this.sendMessage('mode-cycle');
   }
 
   setSteeringMode(mode: string): void {
-    this.ensureConnection();
-    const payload = JSON.stringify({ type: 'steering', mode });
-    this.dispatch(payload);
+    this.sendMessage('steering', { mode });
+  }
+
+  cycleSteeringMode(): void {
+    this.sendMessage('steering-cycle');
   }
 
   panCamera(direction: string): void {
-    this.ensureConnection();
-    const payload = JSON.stringify({ type: 'camera-pan', direction });
-    this.dispatch(payload);
+    this.sendMessage('camera-pan', { direction });
   }
 
   selectCamera(cameraId: string): void {
-    this.ensureConnection();
-    const payload = JSON.stringify({ type: 'camera-select', cameraId });
-    this.dispatch(payload);
+    this.sendMessage('camera-select', { cameraId });
+  }
+
+  toggleLedFront(): void {
+    this.sendMessage('led-toggle', { target: 'front' });
+  }
+
+  toggleLedSweep(): void {
+    this.sendMessage('led-toggle', { target: 'sweep' });
+  }
+
+  toggleLaserFront(): void {
+    this.sendMessage('laser-toggle', { target: 'front' });
+  }
+
+  toggleLaserSweep(): void {
+    this.sendMessage('laser-toggle', { target: 'sweep' });
+  }
+
+  setLedIntensity(level: number): void {
+    this.sendMessage('led-intensity', { value: level });
+  }
+
+  cycleDisplayProfile(): void {
+    this.sendMessage('display-profile-cycle');
   }
 
   private dispatch(payload: string): void {
@@ -76,5 +103,11 @@ export class ControlService {
     } else {
       console.debug('[ControlService] Offline-Sendequeue', payload);
     }
+  }
+
+  private sendMessage(type: string, data: Record<string, unknown> = {}): void {
+    this.ensureConnection();
+    const payload = JSON.stringify({ type, ...data });
+    this.dispatch(payload);
   }
 }
