@@ -25,6 +25,8 @@ export class TelemetryService {
 
   private mockSubscription?: Subscription;
   private mockIndex = 0;
+  private manualYawState?: { value: number; expiresAt: number };
+  private readonly manualYawHoldMs = 600;
 
   connect(): void {
     if (this.mockSubscription) {
@@ -63,6 +65,32 @@ export class TelemetryService {
     this.telemetrySubject.next(snapshot);
   }
 
+  applyManualYaw(yawDegrees: number): void {
+    const yaw = this.normalizeAngle(yawDegrees);
+    const now = Date.now();
+    this.manualYawState = { value: yaw, expiresAt: now + this.manualYawHoldMs };
+
+    const current = this.telemetrySubject.value;
+    if (current.orientation.yaw === yaw) {
+      return;
+    }
+
+    const snapshot: TelemetrySnapshot = {
+      ...current,
+      timestamp: new Date().toISOString(),
+      orientation: {
+        ...current.orientation,
+        yaw,
+      },
+    };
+
+    this.telemetrySubject.next(snapshot);
+  }
+
+  clearManualYaw(): void {
+    this.manualYawState = undefined;
+  }
+
   private createInitialSnapshot(): TelemetrySnapshot {
     return {
       timestamp: new Date().toISOString(),
@@ -87,6 +115,13 @@ export class TelemetryService {
       pitch: this.clamp(previous.orientation.pitch + (Math.random() * 3 - 1.5), -8, 8),
       yaw: (previous.orientation.yaw + (Math.random() * 6 - 3)) % 360,
     };
+
+    const manualYaw = this.manualYawState;
+    if (manualYaw && manualYaw.expiresAt > Date.now()) {
+      orientation.yaw = manualYaw.value;
+    } else {
+      this.manualYawState = undefined;
+    }
 
     const displacement = this.mockIndex * 0.0001;
     const position = {
@@ -135,5 +170,13 @@ export class TelemetryService {
 
   private clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
+  }
+
+  private normalizeAngle(angle: number): number {
+    let normalized = angle % 360;
+    if (normalized < 0) {
+      normalized += 360;
+    }
+    return normalized;
   }
 }

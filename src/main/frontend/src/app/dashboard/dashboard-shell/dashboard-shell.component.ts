@@ -52,6 +52,7 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   private gamepadHandle?: number;
   private lastManualThrottle = 0;
   private lastManualBrake = 0;
+  private lastGamepadTimestamp?: number;
   private previousButtonStates: boolean[] = [];
   private cameraKeys = new Set<string>();
   private displayProfileIndex = 0;
@@ -79,7 +80,7 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     this.telemetrySub = this.telemetryService.telemetry$.subscribe(snapshot => {
       this.telemetry = snapshot;
       this.heading = snapshot.heading;
-      this.orientation = snapshot.orientation;
+      this.orientation = { ...snapshot.orientation };
     });
 
     this.startGamepadPolling();
@@ -91,6 +92,7 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     if (this.gamepadHandle) {
       cancelAnimationFrame(this.gamepadHandle);
     }
+    this.telemetryService.clearManualYaw();
     this.telemetryService.disconnect();
   }
 
@@ -175,15 +177,24 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     }
 
     const poll = () => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const deltaSeconds = this.lastGamepadTimestamp ? (now - this.lastGamepadTimestamp) / 1000 : 0;
+      this.lastGamepadTimestamp = now;
+
       const gamepads = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
       const activePad = gamepads.find(pad => pad && pad.connected);
 
       if (activePad) {
         this.controllerConnected = true;
-        const leftX = this.applyDeadzone(activePad.axes[0] ?? 0);
-        const leftY = this.applyDeadzone(activePad.axes[1] ?? 0);
-        const rightX = this.applyDeadzone(activePad.axes[2] ?? 0);
-        const rightY = this.applyDeadzone(activePad.axes[3] ?? 0);
+        const rawLeftX = activePad.axes[0] ?? 0;
+        const rawLeftY = activePad.axes[1] ?? 0;
+        const rawRightX = activePad.axes[2] ?? 0;
+        const rawRightY = activePad.axes[3] ?? 0;
+
+        const leftX = this.applyDeadzone(rawLeftX);
+        const leftY = this.applyDeadzone(rawLeftY);
+        const rightX = this.applyDeadzone(rawRightX);
+        const rightY = this.applyDeadzone(rawRightY);
 
         const throttle = this.clamp(activePad.buttons[7]?.value ?? 0, 0, 1);
         const brake = this.clamp(activePad.buttons[6]?.value ?? 0, 0, 1);
@@ -205,6 +216,16 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.controlService.sendCameraVector(this.rightStick.x, -this.rightStick.y);
         this.telemetryService.applyManualInput(this.throttleLevel, this.brakeLevel);
         this.handleButtonEvents(activePad.buttons);
+
+        const yawDeadzone = 0.2;
+        const rotationSpeed = 160; // degrees per second at full deflection
+        if (Math.abs(leftX) > yawDeadzone && deltaSeconds > 0) {
+          const effective = (Math.abs(leftX) - yawDeadzone) / (1 - yawDeadzone);
+          const direction = Math.sign(leftX);
+          const yawDelta = direction * effective * rotationSpeed * deltaSeconds;
+          const nextYaw = this.normalizeAngle(this.orientation.yaw + yawDelta);
+          this.telemetryService.applyManualYaw(nextYaw);
+        }
       } else {
         this.controllerConnected = false;
         this.throttleLevel = 0;
@@ -219,6 +240,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.cameraKeys.clear();
         this.controlService.sendCameraVector(0, 0);
         this.updateKeyboardStickVisual();
+        this.telemetryService.clearManualYaw();
+        this.lastGamepadTimestamp = undefined;
       }
 
       this.gamepadHandle = requestAnimationFrame(poll);
@@ -398,5 +421,13 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
 
   private clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
+  }
+
+  private normalizeAngle(angle: number): number {
+    let normalized = angle % 360;
+    if (normalized < 0) {
+      normalized += 360;
+    }
+    return normalized;
   }
 }

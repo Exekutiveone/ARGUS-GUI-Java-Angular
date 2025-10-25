@@ -1,9 +1,8 @@
 import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import {
   AmbientLight,
-  BoxGeometry,
+  Box3,
   Color,
-  CylinderGeometry,
   DirectionalLight,
   Group,
   MathUtils,
@@ -11,8 +10,11 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
   Scene,
+  Vector3,
   WebGLRenderer,
 } from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
 
 export interface Orientation {
   roll: number;
@@ -37,6 +39,7 @@ export class CarModelComponent implements AfterViewInit, OnChanges, OnDestroy {
   private vehicleGroup?: Group;
   private frameId?: number;
   private resizeObserver?: ResizeObserver;
+  private controls?: OrbitControls;
 
   ngAfterViewInit(): void {
     if (!this.canvasHost) {
@@ -55,47 +58,9 @@ export class CarModelComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.scene.add(ambient);
     this.scene.add(keyLight);
 
-    const chassisGeo = new BoxGeometry(2.8, 0.6, 1.4);
-    const chassisMat = new MeshStandardMaterial({
-      color: 0x1f6fb2,
-      metalness: 0.3,
-      roughness: 0.65,
-    });
-
-    const cabinGeo = new BoxGeometry(1.4, 0.5, 1.1);
-    const cabinMat = new MeshStandardMaterial({
-      color: 0x101820,
-      metalness: 0.1,
-      roughness: 0.4,
-    });
-
-    const wheelGeo = new CylinderGeometry(0.35, 0.35, 0.3, 24);
-    wheelGeo.rotateZ(Math.PI / 2);
-    const wheelMat = new MeshStandardMaterial({
-      color: 0x111111,
-      roughness: 0.4,
-    });
-
-    const chassis = new Mesh(chassisGeo, chassisMat);
-    chassis.position.y = 0.35;
-
-    const cabin = new Mesh(cabinGeo, cabinMat);
-    cabin.position.set(0.1, 0.75, 0);
-
-    const wheels = [-1.1, 1.1].flatMap(x =>
-      [-0.65, 0.65].map(z => {
-        const wheel = new Mesh(wheelGeo, wheelMat);
-        wheel.position.set(x, 0.2, z);
-        return wheel;
-      })
-    );
-
     this.vehicleGroup = new Group();
-    this.vehicleGroup.add(chassis);
-    this.vehicleGroup.add(cabin);
-    wheels.forEach(w => this.vehicleGroup?.add(w));
-
     this.scene.add(this.vehicleGroup);
+    this.loadModel();
 
     this.camera = new PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
     this.camera.position.set(4, 3, 4);
@@ -119,6 +84,14 @@ export class CarModelComponent implements AfterViewInit, OnChanges, OnDestroy {
     });
     this.resizeObserver.observe(container);
 
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enablePan = false;
+    this.controls.enableZoom = false;
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.rotateSpeed = 0.8;
+    this.controls.target.set(0, 0.5, 0);
+
     this.updateOrientation();
     this.animate();
   }
@@ -134,11 +107,13 @@ export class CarModelComponent implements AfterViewInit, OnChanges, OnDestroy {
       cancelAnimationFrame(this.frameId);
     }
     this.resizeObserver?.disconnect();
+    this.controls?.dispose();
     this.renderer?.dispose();
   }
 
   private animate = () => {
     this.frameId = requestAnimationFrame(this.animate);
+    this.controls?.update();
     if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
     }
@@ -155,6 +130,49 @@ export class CarModelComponent implements AfterViewInit, OnChanges, OnDestroy {
       MathUtils.degToRad(yaw),
       MathUtils.degToRad(roll),
       'YXZ'
+    );
+  }
+
+  private loadModel(): void {
+    if (!this.vehicleGroup) {
+      return;
+    }
+
+    const loader = new STLLoader();
+    loader.load(
+      'assets/models/Car.stl',
+      geometry => {
+        geometry.computeBoundingBox();
+
+        const boundingBox = geometry.boundingBox ?? new Box3();
+        const size = new Vector3();
+        boundingBox.getSize(size);
+        const maxDimension = Math.max(size.x, size.y, size.z) || 1;
+
+        geometry.center();
+        geometry.computeVertexNormals();
+
+        const material = new MeshStandardMaterial({
+          color: 0x1f6fb2,
+          metalness: 0.35,
+          roughness: 0.55,
+        });
+
+        const mesh = new Mesh(geometry, material);
+
+        const desiredSize = 3;
+        const scale = desiredSize / maxDimension;
+        mesh.scale.setScalar(scale);
+
+        mesh.rotation.x = -Math.PI / 2;
+
+        this.vehicleGroup?.add(mesh);
+        this.updateOrientation();
+      },
+      undefined,
+      error => {
+        console.error('Failed to load car STL', error);
+      }
     );
   }
 }

@@ -18,6 +18,11 @@
 
 .canvas {
   flex: 1;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 }
 
 .overlay {
