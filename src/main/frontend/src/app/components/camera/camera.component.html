@@ -26,6 +26,19 @@
       <ng-template #placeholder>
         <div class="video-placeholder">{{ feed.placeholder || feed.name }}</div>
       </ng-template>
+      <div class="mode-badge" *ngIf="sweepModeBadge">
+        {{ sweepModeBadge }}
+      </div>
+      <button
+        type="button"
+        class="mode-button"
+        *ngIf="sweepModeLabel"
+        (click)="handleModeToggle()"
+        (dblclick)="handleModeReset($event)"
+      >
+        <span class="label">{{ sweepModeLabel }}</span>
+        <span class="hint">{{ sweepModeHint }}</span>
+      </button>
       <div class="rec-indicator" *ngIf="recActive">
         <span class="dot"></span>
         REC

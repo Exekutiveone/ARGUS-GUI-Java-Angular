@@ -133,6 +133,144 @@
       display: block;
       height: 100%;
     }
+
+    .network-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      height: 100%;
+      padding: 1.5rem;
+      box-sizing: border-box;
+      background: rgba(18, 18, 18, 0.92);
+      border: 1px solid rgba(0, 122, 204, 0.24);
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+    }
+
+    .network-form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+
+      label {
+        font-size: 0.72rem;
+        letter-spacing: 0.18rem;
+        text-transform: uppercase;
+        color: rgba(224, 224, 224, 0.7);
+      }
+
+      .host-input-row {
+        display: flex;
+        gap: 0.75rem;
+
+        input {
+          flex: 1;
+          padding: 0.55rem 0.85rem;
+          border-radius: 10px;
+          border: 1px solid rgba(0, 122, 204, 0.35);
+          background: rgba(12, 12, 12, 0.85);
+          color: #e0e0e0;
+          letter-spacing: 0.08rem;
+        }
+
+        button {
+          padding: 0.55rem 1.1rem;
+          border-radius: 10px;
+          border: 1px solid rgba(0, 122, 204, 0.5);
+          background: rgba(0, 122, 204, 0.2);
+          color: #e0e0e0;
+          text-transform: uppercase;
+          letter-spacing: 0.18rem;
+          cursor: pointer;
+        }
+      }
+    }
+
+    .current-host {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 0.8rem;
+      border-radius: 10px;
+      background: rgba(0, 122, 204, 0.12);
+      font-size: 0.8rem;
+      letter-spacing: 0.08rem;
+
+      .label {
+        text-transform: uppercase;
+        color: rgba(224, 224, 224, 0.65);
+      }
+
+      .value {
+        color: #e0e0e0;
+        font-weight: 600;
+      }
+    }
+
+    .host-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      overflow-y: auto;
+    }
+
+    .host-list li {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .host-entry {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0.85rem;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 122, 204, 0.28);
+      background: rgba(14, 14, 14, 0.85);
+      color: #e0e0e0;
+      text-align: left;
+      cursor: pointer;
+      letter-spacing: 0.05rem;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .host-entry.active {
+      border-color: rgba(0, 122, 204, 0.6);
+      background: rgba(0, 122, 204, 0.18);
+    }
+
+    .host-entry .host-url {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .host-entry .badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(0, 122, 204, 0.35);
+      font-size: 0.65rem;
+      letter-spacing: 0.16rem;
+      text-transform: uppercase;
+    }
+
+    .remove-host {
+      width: 2rem;
+      height: 2rem;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 82, 82, 0.4);
+      background: rgba(18, 18, 18, 0.9);
+      color: rgba(255, 82, 82, 0.85);
+      cursor: pointer;
+    }
   }
 }
 

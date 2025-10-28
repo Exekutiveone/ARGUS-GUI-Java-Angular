@@ -30,7 +30,11 @@
         [mainFeed]="mainFeed"
         [secondaryFeeds]="secondaryFeeds"
         [recActive]="true"
+        [sweepModeLabel]="sweepModeLabel"
+        [sweepModeBadge]="sweepModeBadge"
         (selectFeed)="selectCamera($event)"
+        (modeToggle)="handleModeToggleRequest()"
+        (modeReset)="handleModeResetRequest()"
       ></app-camera>
     </section>
 
@@ -40,11 +44,53 @@
         <select id="tasks-select" [(ngModel)]="taskPanelView">
           <option value="tasks">Aufgaben</option>
           <option value="calibration">Kalibrierung</option>
+          <option value="network">Netzwerk</option>
         </select>
       </div>
       <div class="tasks-body" [ngSwitch]="taskPanelView">
         <app-tasks *ngSwitchCase="'tasks'" [tasks]="tasks"></app-tasks>
         <app-calibration *ngSwitchCase="'calibration'"></app-calibration>
+        <div *ngSwitchCase="'network'" class="network-panel">
+          <form class="network-form" (ngSubmit)="addHost()">
+            <label for="host-input">Neuer Host</label>
+            <div class="host-input-row">
+              <input
+                id="host-input"
+                name="hostUrl"
+                type="text"
+                [(ngModel)]="pendingHost"
+                placeholder="http://192.168.x.x:5000"
+                autocomplete="off"
+              />
+              <button type="submit">Hinzufügen</button>
+            </div>
+          </form>
+          <div class="current-host">
+            <span class="label">Aktiver Host</span>
+            <span class="value">{{ activeHost || '—' }}</span>
+          </div>
+          <ul class="host-list">
+            <li *ngFor="let host of hosts; trackBy: trackHost">
+              <button
+                type="button"
+                class="host-entry"
+                [class.active]="host === activeHost"
+                (click)="selectHost(host)"
+              >
+                <span class="host-url">{{ host }}</span>
+                <span class="badge" *ngIf="host === activeHost">Aktiv</span>
+              </button>
+              <button
+                type="button"
+                class="remove-host"
+                (click)="removeHost(host, $event)"
+                aria-label="Host entfernen"
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+        </div>
       </div>
     </section>
 

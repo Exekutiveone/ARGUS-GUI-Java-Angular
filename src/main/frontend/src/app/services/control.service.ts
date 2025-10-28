@@ -21,6 +21,8 @@ export interface GamepadCommand extends Record<string, unknown> {
 export class ControlService {
   private readonly controlEndpoint = 'ws://localhost:4800/ws/control';
   private socket?: WebSocket;
+  private readonly deduplicatedTypes = new Set(['gamepad', 'camera-vector', 'camera-pan']);
+  private readonly lastPayloadByType = new Map<string, string>();
 
   private ensureConnection(): void {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
@@ -31,6 +33,9 @@ export class ControlService {
       this.socket = new WebSocket(this.controlEndpoint);
       this.socket.onopen = () => console.info('[ControlService] Verbindung aktiv');
       this.socket.onerror = (err) => console.error('[ControlService] Socketfehler', err);
+      this.socket.onclose = () => {
+        this.lastPayloadByType.clear();
+      };
     } catch (error) {
       console.warn('[ControlService] Konnte Socket nicht initialisieren', error);
       this.socket = undefined;
@@ -108,6 +113,21 @@ export class ControlService {
   private sendMessage(type: string, data: Record<string, unknown> = {}): void {
     this.ensureConnection();
     const payload = JSON.stringify({ type, ...data });
+    if (!this.shouldSendPayload(type, payload)) {
+      return;
+    }
     this.dispatch(payload);
+  }
+
+  private shouldSendPayload(type: string, payload: string): boolean {
+    if (!this.deduplicatedTypes.has(type)) {
+      return true;
+    }
+    const previous = this.lastPayloadByType.get(type);
+    if (previous === payload) {
+      return false;
+    }
+    this.lastPayloadByType.set(type, payload);
+    return true;
   }
 }

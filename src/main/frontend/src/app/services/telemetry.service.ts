@@ -4,6 +4,7 @@ import { BehaviorSubject, catchError, of, Subscription, timer, switchMap } from 
 
 import { Orientation } from '../components/car-model/car-model.component';
 import { TemperatureReading } from '../components/sensors/sensors.component';
+import { DeviceHostService } from './device-host.service';
 
 export interface TelemetrySnapshot {
   timestamp: string;
@@ -29,9 +30,22 @@ export class TelemetryService {
   private isConnected = false;
   private sensorPollSub?: Subscription;
   private readonly sensorPollIntervalMs = 1000;
-  private readonly deviceApiBase = this.resolveDeviceBaseUrl();
+  private deviceApiBase: string;
+  private orientationState: Orientation = { roll: 0, pitch: 0, yaw: 0 };
+  private orientationInitialized = false;
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly deviceHostService: DeviceHostService,
+  ) {
+    this.deviceApiBase = this.deviceHostService.currentBaseUrl;
+    this.deviceHostService.baseUrl$.subscribe(url => {
+      this.deviceApiBase = url;
+      if (this.isConnected) {
+        this.startSensorPolling();
+      }
+    });
+  }
 
   connect(): void {
     if (this.isConnected) {
@@ -68,27 +82,17 @@ export class TelemetryService {
     this.telemetrySubject.next(snapshot);
   }
 
-  applyManualYaw(yawDegrees: number): void {
-    const yaw = this.normalizeAngle(yawDegrees);
+  resetOrientation(): void {
+    this.orientationState = { roll: 0, pitch: 0, yaw: 0 };
+    this.orientationInitialized = false;
     const current = this.telemetrySubject.value;
-    if (current.orientation.yaw === yaw) {
-      return;
-    }
-
     const snapshot: TelemetrySnapshot = {
       ...current,
       timestamp: new Date().toISOString(),
-      orientation: {
-        ...current.orientation,
-        yaw,
-      },
+      heading: 0,
+      orientation: { roll: 0, pitch: 0, yaw: 0 },
     };
-
     this.telemetrySubject.next(snapshot);
-  }
-
-  clearManualYaw(): void {
-    // No-op; kept for compatibility with previous mock implementation.
   }
 
   private createInitialSnapshot(): TelemetrySnapshot {
@@ -124,26 +128,34 @@ export class TelemetryService {
         }
 
         const current = this.telemetrySubject.value;
-        const heading = typeof data.mag?.heading_deg === 'number' ? data.mag.heading_deg : current.heading;
-        let yaw = this.normalizeAngle(heading);
-        if (data.mag?.heading_deg == null && data.gyro) {
-          yaw = this.normalizeAngle(data.gyro.z);
+
+        if (data.accel) {
+          const accelAngles = this.computeAccelAngles(data.accel);
+          const alpha = this.orientationInitialized ? 0.18 : 1;
+          this.orientationState.roll = this.blendSignedAngle(this.orientationState.roll, accelAngles.roll, alpha);
+          this.orientationState.pitch = this.blendSignedAngle(this.orientationState.pitch, accelAngles.pitch, alpha);
+          this.orientationInitialized = true;
         }
 
-        let roll = current.orientation.roll;
-        let pitch = current.orientation.pitch;
-        if (data.gyro) {
-          roll = data.gyro.x;
-          pitch = data.gyro.y;
-        } else if (data.accel) {
-          const ax = data.accel.x;
-          const ay = data.accel.y;
-          const az = data.accel.z;
-          const rollRad = Math.atan2(ay, az);
-          const pitchRad = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
-          roll = this.toDegrees(rollRad);
-          pitch = this.toDegrees(pitchRad);
+        const headingSource =
+          typeof data.mag?.heading_deg === 'number'
+            ? data.mag.heading_deg
+            : typeof data.gyro?.z === 'number'
+              ? data.gyro.z
+              : undefined;
+
+        if (headingSource != null) {
+          const yawAlpha = this.orientationInitialized ? 0.12 : 1;
+          this.orientationState.yaw = this.blendUnsignedAngle(this.orientationState.yaw, headingSource, yawAlpha);
         }
+
+        const heading = this.normalizeAngle(this.orientationState.yaw);
+        const orientation: Orientation = {
+          roll: this.wrapSignedAngle(this.orientationState.pitch),
+          pitch: this.wrapSignedAngle(this.orientationState.roll),
+          yaw: heading,
+        };
+
         const accelMagnitude =
           data.accel != null
             ? Math.sqrt(data.accel.x ** 2 + data.accel.y ** 2 + data.accel.z ** 2) / 16384
@@ -158,11 +170,7 @@ export class TelemetryService {
           ...current,
           timestamp: new Date().toISOString(),
           heading,
-          orientation: {
-            roll,
-            pitch,
-            yaw,
-          },
+          orientation,
           acceleration: this.shiftAndAppend(current.acceleration, accelMagnitude),
           temperatures,
         };
@@ -184,6 +192,48 @@ export class TelemetryService {
     return Math.min(Math.max(value, min), max);
   }
 
+  private computeAccelAngles(accel: { x: number; y: number; z: number }): { roll: number; pitch: number } {
+    const { x, y, z } = accel;
+    const rollRad = Math.atan2(y, z || 1);
+    const pitchRad = Math.atan2(-x, Math.sqrt(y * y + z * z));
+    return {
+      roll: this.toDegrees(rollRad),
+      pitch: this.toDegrees(pitchRad),
+    };
+  }
+
+  private wrapSignedAngle(angle: number): number {
+    let wrapped = (angle + 180) % 360;
+    if (wrapped < 0) {
+      wrapped += 360;
+    }
+    return wrapped - 180;
+  }
+
+  private blendSignedAngle(current: number, target: number, alpha: number): number {
+    const currentWrapped = this.wrapSignedAngle(current);
+    const targetWrapped = this.wrapSignedAngle(target);
+    let diff = targetWrapped - currentWrapped;
+    if (diff > 180) {
+      diff -= 360;
+    } else if (diff < -180) {
+      diff += 360;
+    }
+    return this.wrapSignedAngle(currentWrapped + diff * alpha);
+  }
+
+  private blendUnsignedAngle(current: number, target: number, alpha: number): number {
+    const currentNorm = this.normalizeAngle(current);
+    const targetNorm = this.normalizeAngle(target);
+    let diff = targetNorm - currentNorm;
+    if (diff > 180) {
+      diff -= 360;
+    } else if (diff < -180) {
+      diff += 360;
+    }
+    return this.normalizeAngle(currentNorm + diff * alpha);
+  }
+
   private normalizeAngle(angle: number): number {
     let normalized = angle % 360;
     if (normalized < 0) {
@@ -196,23 +246,6 @@ export class TelemetryService {
     return (rad * 180) / Math.PI;
   }
 
-  private resolveDeviceBaseUrl(): string {
-    if (typeof window === 'undefined') {
-      return 'http://192.168.178.164:5000';
-    }
-
-    const override = (window as { ARGUS_DEVICE_HOST?: string }).ARGUS_DEVICE_HOST;
-    if (override) {
-      return override.replace(/\/+$/, '');
-    }
-
-    const host = window.location.hostname || 'localhost';
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return '/device-api';
-    }
-
-    return `${window.location.protocol}//${host}:5000`;
-  }
 }
 
 interface SensorData {

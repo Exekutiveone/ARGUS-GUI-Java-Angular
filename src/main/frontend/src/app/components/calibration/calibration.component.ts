@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Subscription, timer, of, switchMap, catchError } from 'rxjs';
 
 import { CalibrationService, CalibrationStatusResponse } from '../../services/calibration.service';
+import { TelemetryService } from '../../services/telemetry.service';
 
 @Component({
   selector: 'app-calibration',
@@ -19,8 +20,12 @@ export class CalibrationComponent implements OnInit, OnDestroy {
   private pollSub?: Subscription;
   private etaIntervalId?: ReturnType<typeof setInterval>;
   private readonly defaultCountdownSeconds = 30;
+  private wasRunning = false;
 
-  constructor(private readonly calibrationService: CalibrationService) {}
+  constructor(
+    private readonly calibrationService: CalibrationService,
+    private readonly telemetryService: TelemetryService,
+  ) {}
 
   ngOnInit(): void {
     this.startPolling();
@@ -49,6 +54,7 @@ export class CalibrationComponent implements OnInit, OnDestroy {
           return;
         }
         this.status = { running: true, result: this.status?.result, offsets: this.status?.offsets };
+        this.wasRunning = true;
         if (this.etaSeconds == null) {
           this.startCountdown();
         }
@@ -100,6 +106,10 @@ export class CalibrationComponent implements OnInit, OnDestroy {
         if (status) {
           this.status = status;
           this.lastUpdated = new Date();
+          if (this.wasRunning && !status.running) {
+            this.telemetryService.resetOrientation();
+          }
+          this.wasRunning = !!status.running;
           if (!status.running) {
             this.isStarting = false;
             this.stopCountdown();

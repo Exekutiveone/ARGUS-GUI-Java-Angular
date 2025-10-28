@@ -363,8 +363,14 @@ def sensor_loop():
                 # Compass block
                 try:
                     set_mux_channel(bus, CH_COMPASS)
-                    mx, my, mz = read_qmc5883l(bus, 0x0D)
+                    mx_raw, my_raw, mz_raw = read_qmc5883l(bus, 0x0D)
+
+                    mx = mx_raw - calibration_offsets["mag_x"]
+                    my = my_raw - calibration_offsets["mag_y"]
+                    mz = mz_raw - calibration_offsets["mag_z"]
+
                     heading_now = (math.degrees(math.atan2(my, mx)) + 360.0) % 360.0
+                    heading_now = (heading_now - calibration_offsets["heading"] + 360.0) % 360.0
 
                     smooth_state["heading_deg"] = smooth_val(
                         smooth_state["heading_deg"],
@@ -373,9 +379,9 @@ def sensor_loop():
                     )
 
                     sensor_data["mag"].update({
-                        "x": int(mx),
-                        "y": int(my),
-                        "z": int(mz),
+                        "x": int(round(mx)),
+                        "y": int(round(my)),
+                        "z": int(round(mz)),
                         "heading_deg": None if smooth_state["heading_deg"] is None
                                         else float(smooth_state["heading_deg"])
                     })
@@ -385,7 +391,15 @@ def sensor_loop():
                 # IMU block
                 try:
                     set_mux_channel(bus, CH_IMU)
-                    ax, ay, az, gx, gy, gz = read_bmi160(bus, 0x69)
+                    ax_raw, ay_raw, az_raw, gx_raw, gy_raw, gz_raw = read_bmi160(bus, 0x69)
+
+                    ax = ax_raw - calibration_offsets["accel_x"]
+                    ay = ay_raw - calibration_offsets["accel_y"]
+                    az = az_raw - calibration_offsets["accel_z"]
+
+                    gx = gx_raw - calibration_offsets["gyro_x"]
+                    gy = gy_raw - calibration_offsets["gyro_y"]
+                    gz = gz_raw - calibration_offsets["gyro_z"]
 
                     smooth_state["accel_x"] = smooth_val(smooth_state["accel_x"], ax, 0.3)
                     smooth_state["accel_y"] = smooth_val(smooth_state["accel_y"], ay, 0.3)
@@ -396,14 +410,14 @@ def sensor_loop():
                     smooth_state["gyro_z"] = smooth_val(smooth_state["gyro_z"], gz, 0.3)
 
                     sensor_data["accel"].update({
-                        "x": int(smooth_state["accel_x"]) if smooth_state["accel_x"] is not None else int(ax),
-                        "y": int(smooth_state["accel_y"]) if smooth_state["accel_y"] is not None else int(ay),
-                        "z": int(smooth_state["accel_z"]) if smooth_state["accel_z"] is not None else int(az),
+                        "x": int(round(smooth_state["accel_x"])) if smooth_state["accel_x"] is not None else int(round(ax)),
+                        "y": int(round(smooth_state["accel_y"])) if smooth_state["accel_y"] is not None else int(round(ay)),
+                        "z": int(round(smooth_state["accel_z"])) if smooth_state["accel_z"] is not None else int(round(az)),
                     })
                     sensor_data["gyro"].update({
-                        "x": int(smooth_state["gyro_x"]) if smooth_state["gyro_x"] is not None else int(gx),
-                        "y": int(smooth_state["gyro_y"]) if smooth_state["gyro_y"] is not None else int(gy),
-                        "z": int(smooth_state["gyro_z"]) if smooth_state["gyro_z"] is not None else int(gz),
+                        "x": int(round(smooth_state["gyro_x"])) if smooth_state["gyro_x"] is not None else int(round(gx)),
+                        "y": int(round(smooth_state["gyro_y"])) if smooth_state["gyro_y"] is not None else int(round(gy)),
+                        "z": int(round(smooth_state["gyro_z"])) if smooth_state["gyro_z"] is not None else int(round(gz)),
                     })
                 except Exception:
                     pass
@@ -484,7 +498,7 @@ calibration_offsets = {
 }
 
 def run_calibration(duration_sec=30):
-    global calibration_running, calibration_result, calibration_offsets
+    global calibration_running, calibration_result, calibration_offsets, smooth_state, sensor_data
     calibration_running = True
     calibration_result = None
     print("[INFO] Starting 30s calibration... vehicle must be still, facing North")
@@ -523,6 +537,16 @@ def run_calibration(duration_sec=30):
     for k,v in calibration_result.items():
         if v and "avg" in v:
             calibration_offsets[k] = v["avg"]
+
+    for axis in ("x", "y", "z"):
+        smooth_state[f"accel_{axis}"] = 0
+        smooth_state[f"gyro_{axis}"] = 0
+        sensor_data["accel"][axis] = 0
+        sensor_data["gyro"][axis] = 0
+        sensor_data["mag"][axis] = 0
+
+    smooth_state["heading_deg"] = 0
+    sensor_data["mag"]["heading_deg"] = 0
 
     calibration_running = False
     print("[INFO] Calibration done. Offsets updated.")

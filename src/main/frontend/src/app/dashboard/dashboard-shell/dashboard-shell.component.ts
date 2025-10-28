@@ -9,6 +9,7 @@ import { VideoService } from '../../services/video.service';
 import { CameraFeed } from '../../components/camera/camera.component';
 import { Orientation } from '../../components/car-model/car-model.component';
 import { TaskItem } from '../../components/tasks/tasks.component';
+import { DeviceHostService } from '../../services/device-host.service';
 
 @Component({
   selector: 'app-dashboard-shell',
@@ -47,9 +48,16 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
 
   cameraFeeds: CameraFeed[] = [];
   mainFeed!: CameraFeed;
+  hosts: string[] = [];
+  activeHost = '';
+  pendingHost = '';
+  sweepModeLabel = 'Schwenk XY';
+  sweepModeBadge = 'Schwenk XY';
 
   private telemetrySub?: Subscription;
   private feedsSub?: Subscription;
+  private hostsSub?: Subscription;
+  private activeHostSub?: Subscription;
   private gamepadHandle?: number;
   private lastManualThrottle = 0;
   private lastManualBrake = 0;
@@ -69,16 +77,40 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     pan: 11,
     tilt: 10,
   };
-  private readonly servoUpdateIntervalMs = 100;
-  private readonly sweepPanSpeedDegreesPerSecond = 120;
-  private readonly sweepTiltSpeedDegreesPerSecond = 120;
+  private readonly steeringServoChannels = {
+    front: 1,
+    rear: 2,
+  };
+  private readonly servoUpdateIntervalMs = 60;
+  private readonly sweepPanSpeedDegreesPerSecond = 300;
+  private readonly sweepTiltSpeedDegreesPerSecond = 300;
   private readonly keyboardServoStepDegrees = 4;
+  private panMode: 'xy' | 'x' | 'y' = 'xy';
+  private readonly sweepModeLabels: Record<'xy' | 'x' | 'y', string> = {
+    xy: 'Schwenk XY',
+    x: 'Schwenk Nur X',
+    y: 'Schwenk Nur Y',
+  };
+  private readonly modeDoublePressWindowMs = 320;
+  private readonly modeToggleDelayMs = 220;
+  private modeToggleTimer?: number;
+  private lastModeActivationTimestamp = 0;
   private sweepPanAngle = 90;
   private sweepTiltAngle = 90;
   private lastSentSweepPan = -1;
   private lastSentSweepTilt = -1;
   private servoUpdatePending = false;
   private lastServoPushTimestamp = 0;
+  private steeringAngleFront = 90;
+  private steeringAngleRear = 90;
+  private lastSentSteeringFront = -1;
+  private lastSentSteeringRear = -1;
+  private steeringUpdatePending = false;
+  private lastSteeringPushTimestamp = 0;
+  private readonly steeringCenterDegrees = 90;
+  private readonly steeringRangeDegrees = 45;
+  private readonly steeringAngleEpsilon = 0.5;
+  private readonly steeringUpdateIntervalMs = 60;
 
   constructor(
     private readonly telemetryService: TelemetryService,
@@ -86,9 +118,14 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     private readonly authService: AuthService,
     private readonly videoService: VideoService,
     private readonly deviceUpdateService: DeviceUpdateService,
-  ) {}
+    private readonly deviceHostService: DeviceHostService,
+  ) {
+    this.hosts = this.deviceHostService.currentHosts;
+    this.activeHost = this.deviceHostService.currentBaseUrl;
+    this.updateSweepModeLabels();
+  }
 
-  taskPanelView: 'tasks' | 'calibration' = 'tasks';
+  taskPanelView: 'tasks' | 'calibration' | 'network' = 'tasks';
 
   get secondaryFeeds(): CameraFeed[] {
     const mainId = this.mainFeed?.id;
@@ -96,6 +133,13 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.hostsSub = this.deviceHostService.hosts$.subscribe(hosts => {
+      this.hosts = hosts;
+    });
+    this.activeHostSub = this.deviceHostService.baseUrl$.subscribe(host => {
+      this.activeHost = host;
+    });
+
     this.telemetryService.connect();
     this.feedsSub = this.videoService.feeds$.subscribe(feeds => {
       this.cameraFeeds = feeds;
@@ -116,10 +160,12 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.telemetrySub?.unsubscribe();
     this.feedsSub?.unsubscribe();
+    this.hostsSub?.unsubscribe();
+    this.activeHostSub?.unsubscribe();
+    this.cancelPanModeToggle();
     if (this.gamepadHandle) {
       cancelAnimationFrame(this.gamepadHandle);
     }
-    this.telemetryService.clearManualYaw();
     this.telemetryService.disconnect();
   }
 
@@ -189,6 +235,36 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     this.authService.logout();
   }
 
+  addHost(): void {
+    const value = this.pendingHost.trim();
+    if (!value) {
+      return;
+    }
+    this.deviceHostService.addHost(value);
+    this.pendingHost = '';
+  }
+
+  selectHost(host: string): void {
+    this.deviceHostService.setActiveHost(host);
+  }
+
+  removeHost(host: string, event?: Event): void {
+    event?.stopPropagation();
+    this.deviceHostService.removeHost(host);
+  }
+
+  trackHost(index: number, host: string): string {
+    return this.deviceHostService.trackHost(index, host);
+  }
+
+  handleModeToggleRequest(): void {
+    this.handlePanModeActivation();
+  }
+
+  handleModeResetRequest(): void {
+    this.executePanModeReset();
+  }
+
   private sendDriveCommand(): void {
     const command: DriveCommand = {
       keys: this.pressedKeys,
@@ -245,16 +321,6 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.flushServoUpdates(now);
         this.telemetryService.applyManualInput(this.throttleLevel, this.brakeLevel);
         this.handleButtonEvents(activePad.buttons);
-
-        const yawDeadzone = 0.2;
-        const rotationSpeed = 160; // degrees per second at full deflection
-        if (Math.abs(leftX) > yawDeadzone && deltaSeconds > 0) {
-          const effective = (Math.abs(leftX) - yawDeadzone) / (1 - yawDeadzone);
-          const direction = Math.sign(leftX);
-          const yawDelta = direction * effective * rotationSpeed * deltaSeconds;
-          const nextYaw = this.normalizeAngle(this.orientation.yaw + yawDelta);
-          this.telemetryService.applyManualYaw(nextYaw);
-        }
       } else {
         this.controllerConnected = false;
         this.throttleLevel = 0;
@@ -269,7 +335,6 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.cameraKeys.clear();
         this.emitCameraVector(0, 0);
         this.updateKeyboardStickVisual();
-        this.telemetryService.clearManualYaw();
         this.lastGamepadTimestamp = undefined;
         this.flushServoUpdates(now);
       }
@@ -391,6 +456,10 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
       this.advanceDisplayProfile();
     }
 
+    if (this.wasButtonJustPressed(buttons, 11)) {
+      this.handlePanModeActivation();
+    }
+
     this.previousButtonStates = buttons.map(button => button.pressed);
   }
 
@@ -482,6 +551,78 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     return typeof performance !== 'undefined' ? performance.now() : Date.now();
   }
 
+  private updateSweepModeLabels(): void {
+    const label = this.sweepModeLabels[this.panMode];
+    this.sweepModeLabel = label;
+    this.sweepModeBadge = label;
+  }
+
+  private setSweepMode(mode: 'xy' | 'x' | 'y'): void {
+    this.panMode = mode;
+    this.updateSweepModeLabels();
+  }
+
+  private cycleSweepMode(): void {
+    switch (this.panMode) {
+      case 'xy':
+        this.setSweepMode('x');
+        break;
+      case 'x':
+        this.setSweepMode('y');
+        break;
+      default:
+        this.setSweepMode('xy');
+        break;
+    }
+  }
+
+  private handlePanModeActivation(): void {
+    const timestamp = this.getTimestamp();
+    if (this.lastModeActivationTimestamp && timestamp - this.lastModeActivationTimestamp <= this.modeDoublePressWindowMs) {
+      this.executePanModeReset();
+      return;
+    }
+
+    this.lastModeActivationTimestamp = timestamp;
+    this.schedulePanModeToggle();
+  }
+
+  private schedulePanModeToggle(): void {
+    this.cancelPanModeToggle();
+    if (typeof window === 'undefined') {
+      this.cycleSweepMode();
+      this.lastModeActivationTimestamp = 0;
+      return;
+    }
+
+    this.modeToggleTimer = window.setTimeout(() => {
+      this.modeToggleTimer = undefined;
+      this.cycleSweepMode();
+      this.lastModeActivationTimestamp = 0;
+    }, this.modeToggleDelayMs);
+  }
+
+  private cancelPanModeToggle(): void {
+    if (typeof window !== 'undefined' && this.modeToggleTimer != null) {
+      window.clearTimeout(this.modeToggleTimer);
+      this.modeToggleTimer = undefined;
+    }
+  }
+
+  private executePanModeReset(): void {
+    this.cancelPanModeToggle();
+    this.lastModeActivationTimestamp = 0;
+    this.setSweepMode('xy');
+    this.centerSweepServos();
+  }
+
+  private centerSweepServos(): void {
+    this.sweepPanAngle = 90;
+    this.sweepTiltAngle = 90;
+    this.servoUpdatePending = true;
+    this.flushServoUpdates(this.getTimestamp(), true);
+  }
+
   private initialiseSweepServos(): void {
     this.servoUpdatePending = true;
     this.flushServoUpdates(this.getTimestamp(), true);
@@ -492,8 +633,11 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const panDelta = panInput * this.sweepPanSpeedDegreesPerSecond * deltaSeconds;
-    const tiltDelta = -tiltInput * this.sweepTiltSpeedDegreesPerSecond * deltaSeconds;
+    const panControl = this.panMode === 'y' ? 0 : -panInput;
+    const tiltControl = this.panMode === 'x' ? 0 : tiltInput;
+
+    const panDelta = panControl * this.sweepPanSpeedDegreesPerSecond * deltaSeconds;
+    const tiltDelta = -tiltControl * this.sweepTiltSpeedDegreesPerSecond * deltaSeconds;
 
     if (panDelta === 0 && tiltDelta === 0) {
       return;
@@ -503,8 +647,10 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   }
 
   private applyKeyboardSweepAdjustment(): void {
-    const panStep = this.rightStick.x * this.keyboardServoStepDegrees;
-    const tiltStep = -this.rightStick.y * this.keyboardServoStepDegrees;
+    const panStep =
+      this.panMode === 'y' ? 0 : -this.rightStick.x * this.keyboardServoStepDegrees;
+    const tiltStep =
+      this.panMode === 'x' ? 0 : -this.rightStick.y * this.keyboardServoStepDegrees;
 
     if (panStep === 0 && tiltStep === 0) {
       return;
@@ -583,15 +729,18 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   }
 
   private emitCameraVector(x: number, y: number): void {
+    const effectiveX = this.panMode === 'y' ? 0 : x;
+    const effectiveY = this.panMode === 'x' ? 0 : y;
+
     if (this.lastCameraVector) {
-      const dx = Math.abs(this.lastCameraVector.x - x);
-      const dy = Math.abs(this.lastCameraVector.y - y);
+      const dx = Math.abs(this.lastCameraVector.x - effectiveX);
+      const dy = Math.abs(this.lastCameraVector.y - effectiveY);
       if (dx < this.cameraVectorEpsilon && dy < this.cameraVectorEpsilon) {
         return;
       }
     }
-    this.lastCameraVector = { x, y };
-    this.controlService.sendCameraVector(x, y);
+    this.lastCameraVector = { x: effectiveX, y: effectiveY };
+    this.controlService.sendCameraVector(effectiveX, effectiveY);
   }
 }
 
