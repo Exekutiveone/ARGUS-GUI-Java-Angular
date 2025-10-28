@@ -1,0 +1,171 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{geometry}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{listings}
+\geometry{margin=2.5cm}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+\title{ARGUS Device Bridge -- API Dokumentation}
+\author{Projekt ARGUS}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Überblick}
+Der ARGUS Device Bridge Server stellt eine REST-Schnittstelle, zwei WebSocket-Endpunkte sowie
+ einen MJPEG-Proxy bereit. Die Schnittstellen dienen der Authentifizierung, der Übermittlung von
+ Steuerkommandos und Betriebsmodi sowie der Bereitstellung von Telemetrie- und Videodaten.
+ Alle HTTP-Endpunkte verwenden JSON als Austauschformat, sofern nicht anders angegeben.
+
+\section{REST-API}
+\subsection{Authentifizierung}
+\begin{longtable}{p{3.2cm}p{3cm}p{7.5cm}}
+\textbf{Methode} & \textbf{Pfad} & \textbf{Beschreibung}\\\hline
+POST & \texttt{/api/auth/login} & Validiert die Anmeldedaten und liefert einen temporären Token.\\
+\end{longtable}
+
+\paragraph{Request}
+\begin{lstlisting}[language=json]
+{
+  "username": "pilot",
+  "password": "geheim"
+}
+\end{lstlisting}
+
+Ungültige Anfragen (fehlende Felder, leere Zeichenketten) werden mit HTTP~400 beantwortet.
+
+\paragraph{Response}
+\begin{lstlisting}[language=json]
+{
+  "token": "0d7c0c63-2f34-4c9f-9d9d-6e0e2e58e6c1",
+  "expiresIn": 3600
+}
+\end{lstlisting}
+
+Der Token ist ein zufällig generierter UUID-String ohne weitere Bedeutung.
+
+\subsection{Steuerung und Konfiguration}
+Alle Endpunkte in diesem Abschnitt befinden sich unter dem Präfix \texttt{/api}.
+\begin{longtable}{p{3.2cm}p{3cm}p{7.5cm}}
+\textbf{Methode} & \textbf{Pfad} & \textbf{Beschreibung}\\\hline
+POST & \texttt{/api/control} & Entgegennahme generischer Steuerbefehle bzw. Kamera-Pan/Tilt-Korrekturen.\\
+POST & \texttt{/api/mode} & Änderung des Fahrmodus.\\
+POST & \texttt{/api/steering} & Änderung des Lenkmodus.\\
+GET & \texttt{/api/telemetry} & Liefert einen synthetischen Telemetrie-Snapshot.\\
+\end{longtable}
+
+\paragraph{/api/control}
+Es werden zwei Nutzlastvarianten unterschieden:
+\begin{itemize}
+  \item Allgemeiner Steuerbefehl:
+\begin{lstlisting}[language=json]
+{
+  "source": "joystick",
+  "command": "throttle",
+  "value": 0.42
+}
+\end{lstlisting}
+  \item Kameraanpassung:
+\begin{lstlisting}[language=json]
+{
+  "action": "camera-pan-tilt",
+  "panDelta": 1.5,
+  "tiltDelta": -0.5
+}
+\end{lstlisting}
+\end{itemize}
+Die API bestätigt Anfragen mit HTTP~202 (Accepted), eine weitergehende Validierung findet aktuell nicht statt.
+
+\paragraph{/api/mode}
+\begin{lstlisting}[language=json]
+{
+  "mode": "autonomous"
+}
+\end{lstlisting}
+Der Endpunkt quittiert die Anfrage mit HTTP~202. Der String \texttt{mode} wird protokolliert, jedoch nicht validiert.
+
+\paragraph{/api/steering}
+\begin{lstlisting}[language=json]
+{
+  "mode": "differential"
+}
+\end{lstlisting}
+Analog zu \texttt{/api/mode} liefert der Server HTTP~202 als Bestätigung.
+
+\paragraph{/api/telemetry}
+Antwortpayload gemäß Record \texttt{TelemetrySnapshot}:
+\begin{lstlisting}[language=json]
+{
+  "gps": { "lat": 52.5205, "lng": 13.4049 },
+  "heading": 123.45,
+  "orientation": { "roll": 1.2, "pitch": -0.8, "yaw": 45.6 },
+  "throttle": 0.378,
+  "brake": 0.125,
+  "temps": [
+    { "label": "Temp #1", "value": 35.2 },
+    { "label": "Temp #3", "value": 32.7 }
+  ],
+  "accelerationHistory": [0.5, 0.7, ...],
+  "brakingHistory": [0.1, 0.0, ...],
+  "timestamp": 1715527950123
+}
+\end{lstlisting}
+Die Messwerte werden vom Service \texttt{TelemetryGenerator} synthetisch erzeugt und bei jedem Abruf aktualisiert.
+
+\subsection{Video-Proxy}
+\begin{longtable}{p{3.2cm}p{3cm}p{7.5cm}}
+\textbf{Methode} & \textbf{Pfad} & \textbf{Beschreibung}\\\hline
+GET & \texttt{/stream-proxy?target=<URL>} & Reicht MJPEG-Streams von HTTP/HTTPS-Zielen durch.\\
+\end{longtable}
+Der Zielparameter \texttt{target} muss eine absolute URL mit Schema \texttt{http} oder \texttt{https} sein.
+Fehler des Upstream-Servers werden als HTTP~502 (Bad Gateway) an den Client zurückgegeben.
+
+\section{WebSocket-Schnittstellen}
+\begin{longtable}{p{4cm}p{9cm}}
+\textbf{Pfad} & \textbf{Beschreibung}\\\hline
+\texttt{/ws/telemetry} & Broadcastet jede Sekunde einen JSON-codierten \texttt{TelemetrySnapshot} an alle verbundenen Clients. Beim Verbindungsaufbau erhält der Client sofort einen Start-Snapshot.\\
+\texttt{/ws/control} & Nimmt JSON-Steuerkommandos entgegen. Der erwartete Aufbau entspricht den Nutzlasten von \texttt{/api/control}.\\
+\end{longtable}
+
+Die WebSocket-Verbindungen erlauben Cross-Origin-Zugriffe (\texttt{*}). Fehlgeschlagene Sendungen werden serverseitig protokolliert.
+
+\section{Domänenmodelle}
+\begin{longtable}{p{4cm}p{9cm}}
+\textbf{Record} & \textbf{Felder}\\\hline
+\texttt{AuthRequest} & \texttt{username} (String), \texttt{password} (String)\\
+\texttt{AuthResponse} & \texttt{token} (String), \texttt{expiresIn} (long, Sekunden)\\
+\texttt{ModeChangeRequest} & \texttt{mode} (String)\\
+\texttt{SteeringModeRequest} & \texttt{mode} (String)\\
+\texttt{ControlCommand} & \texttt{source} (String), \texttt{command} (String), \texttt{value} (Double), \texttt{timestamp} (long, Millisekunden)\\
+\texttt{CameraAdjustment} & \texttt{action} (String), \texttt{panDelta} (double), \texttt{tiltDelta} (double), \texttt{timestamp} (long)\\
+\texttt{TelemetrySnapshot} & \texttt{gps} (\texttt{GpsCoordinate}), \texttt{heading} (double), \texttt{orientation} (\texttt{Orientation}), \texttt{throttle} (double), \texttt{brake} (double), \texttt{temps} (Liste \texttt{TemperatureReading}), \texttt{accelerationHistory} (Liste double), \texttt{brakingHistory} (Liste double), \texttt{timestamp} (long)\\
+\texttt{GpsCoordinate} & \texttt{lat} (double), \texttt{lng} (double)\\
+\texttt{Orientation} & \texttt{roll} (double), \texttt{pitch} (double), \texttt{yaw} (double)\\
+\texttt{TemperatureReading} & \texttt{label} (String), \texttt{value} (double)\\
+\end{longtable}
+
+\section{Antwortcodes}
+Sofern nicht anders beschrieben, folgen die Endpunkte folgenden Antwortcodes:
+\begin{itemize}
+  \item \textbf{200 OK}: Erfolgreiche GET-Anfrage (z.\,B. \texttt{/api/telemetry}).
+  \item \textbf{202 Accepted}: Steuerbefehle wurden entgegengenommen (\texttt{/api/control}, \texttt{/api/mode}, \texttt{/api/steering}).
+  \item \textbf{400 Bad Request}: Pflichtparameter fehlen oder sind ungültig (z.\,B. \texttt{/api/auth/login}, \texttt{/stream-proxy}).
+  \item \textbf{502 Bad Gateway}: Der Upstream-Stream lieferte einen Fehler, der an den Client weitergereicht wird (\texttt{/stream-proxy}).
+\end{itemize}
+
+\section{Beispiel-Workflow}
+\begin{enumerate}
+  \item \textbf{Login}: Client ruft \texttt{POST /api/auth/login} auf und speichert das erhaltene Token.
+  \item \textbf{Telemetrie abonnieren}: WebSocket-Verbindung zu \texttt{/ws/telemetry} aufbauen, um kontinuierliche Daten zu erhalten.
+  \item \textbf{Steuerbefehle senden}: Einzelne Kommandos via \texttt{POST /api/control} oder persistent über \texttt{/ws/control} übermitteln.
+  \item \textbf{Videostream nutzen}: Mit \texttt{/stream-proxy} einen MJPEG-Stream einer externen Kamera durchreichen.
+\end{enumerate}
+
+\end{document}
