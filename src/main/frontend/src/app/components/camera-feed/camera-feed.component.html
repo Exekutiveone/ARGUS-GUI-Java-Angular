@@ -1,6 +1,25 @@
 <div class="feed-card" (click)="onActivate()" tabindex="0" role="button">
   <div class="frame">
-    <video *ngIf="feed?.streamUrl; else placeholder" [src]="feed?.streamUrl" muted playsinline></video>
+    <ng-container *ngIf="feed?.streamUrl; else placeholder">
+      <ng-container [ngSwitch]="feed?.renderMode">
+        <ng-container *ngSwitchCase="'image'">
+          <img
+            [src]="feed?.streamUrl"
+            [alt]="feed?.name || 'Camera feed'"
+            [ngStyle]="rotationStyle()"
+          />
+        </ng-container>
+        <ng-container *ngSwitchCase="'proxied-image'">
+          <app-stream-bridge
+            [src]="feed?.streamUrl || ''"
+            [rotationDegrees]="feed?.rotationDegrees"
+          ></app-stream-bridge>
+        </ng-container>
+        <ng-container *ngSwitchDefault>
+          <video [src]="feed?.streamUrl" muted playsinline [ngStyle]="rotationStyle()"></video>
+        </ng-container>
+      </ng-container>
+    </ng-container>
     <ng-template #placeholder>
       <div class="video-placeholder">{{ feed?.placeholder || feed?.name }}</div>
     </ng-template>

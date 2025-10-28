@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Subscription, interval } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject, catchError, of, Subscription, timer, switchMap } from 'rxjs';
 
 import { Orientation } from '../components/car-model/car-model.component';
 import { TemperatureReading } from '../components/sensors/sensors.component';
@@ -16,6 +17,8 @@ export interface TelemetrySnapshot {
   battery: number;
 }
 
+
+
 @Injectable({
   providedIn: 'root',
 })
@@ -23,26 +26,26 @@ export class TelemetryService {
   private readonly telemetrySubject = new BehaviorSubject<TelemetrySnapshot>(this.createInitialSnapshot());
   readonly telemetry$ = this.telemetrySubject.asObservable();
 
-  private mockSubscription?: Subscription;
-  private mockIndex = 0;
-  private manualYawState?: { value: number; expiresAt: number };
-  private readonly manualYawHoldMs = 600;
+  private isConnected = false;
+  private sensorPollSub?: Subscription;
+  private readonly sensorPollIntervalMs = 1000;
+  private readonly deviceApiBase = this.resolveDeviceBaseUrl();
+
+  constructor(private readonly http: HttpClient) {}
 
   connect(): void {
-    if (this.mockSubscription) {
+    if (this.isConnected) {
       return;
     }
 
-    this.mockSubscription = interval(1500).subscribe(() => {
-      const snapshot = this.generateMockUpdate(this.telemetrySubject.value);
-      this.telemetrySubject.next(snapshot);
-      this.mockIndex++;
-    });
+    this.isConnected = true;
+    this.startSensorPolling();
   }
 
   disconnect(): void {
-    this.mockSubscription?.unsubscribe();
-    this.mockSubscription = undefined;
+    this.isConnected = false;
+    this.sensorPollSub?.unsubscribe();
+    this.sensorPollSub = undefined;
   }
 
   applyManualInput(throttlePercent: number, brakePercent: number): void {
@@ -67,9 +70,6 @@ export class TelemetryService {
 
   applyManualYaw(yawDegrees: number): void {
     const yaw = this.normalizeAngle(yawDegrees);
-    const now = Date.now();
-    this.manualYawState = { value: yaw, expiresAt: now + this.manualYawHoldMs };
-
     const current = this.telemetrySubject.value;
     if (current.orientation.yaw === yaw) {
       return;
@@ -88,75 +88,87 @@ export class TelemetryService {
   }
 
   clearManualYaw(): void {
-    this.manualYawState = undefined;
+    // No-op; kept for compatibility with previous mock implementation.
   }
 
   private createInitialSnapshot(): TelemetrySnapshot {
     return {
       timestamp: new Date().toISOString(),
-      position: { lat: 48.1351, lon: 11.582 },
+      position: { lat: 0, lon: 0 },
       heading: 0,
       orientation: { roll: 0, pitch: 0, yaw: 0 },
       temperatures: [
-        { label: 'Temp #1', value: 32.5 },
-        { label: 'Temp #3', value: 36.1 },
+        { label: 'BME Temp', value: 0 },
+        { label: 'Thermal Max', value: 0 },
       ],
-      acceleration: this.generateSeries(20, value => value * 2),
-      braking: this.generateSeries(20, value => Math.max(0, Math.sin(value * 0.4)) * 30),
-      speed: 18,
-      battery: 86,
+      acceleration: Array(20).fill(0),
+      braking: Array(20).fill(0),
+      speed: 0,
+      battery: 0,
     };
   }
 
-  private generateMockUpdate(previous: TelemetrySnapshot): TelemetrySnapshot {
-    const heading = (previous.heading + 5 + Math.random() * 4) % 360;
-    const orientation: Orientation = {
-      roll: this.clamp(previous.orientation.roll + (Math.random() * 4 - 2), -10, 10),
-      pitch: this.clamp(previous.orientation.pitch + (Math.random() * 3 - 1.5), -8, 8),
-      yaw: (previous.orientation.yaw + (Math.random() * 6 - 3)) % 360,
-    };
+  private startSensorPolling(): void {
+    this.sensorPollSub?.unsubscribe();
+    this.sensorPollSub = timer(0, this.sensorPollIntervalMs)
+      .pipe(
+        switchMap(() =>
+          this.http
+            .get<SensorData>(`${this.deviceApiBase}/sensor_data`)
+            .pipe(catchError(() => of(undefined))),
+        ),
+      )
+      .subscribe(data => {
+        if (!data) {
+          return;
+        }
 
-    const manualYaw = this.manualYawState;
-    if (manualYaw && manualYaw.expiresAt > Date.now()) {
-      orientation.yaw = manualYaw.value;
-    } else {
-      this.manualYawState = undefined;
-    }
+        const current = this.telemetrySubject.value;
+        const heading = typeof data.mag?.heading_deg === 'number' ? data.mag.heading_deg : current.heading;
+        let yaw = this.normalizeAngle(heading);
+        if (data.mag?.heading_deg == null && data.gyro) {
+          yaw = this.normalizeAngle(data.gyro.z);
+        }
 
-    const displacement = this.mockIndex * 0.0001;
-    const position = {
-      lat: previous.position.lat + displacement * 0.3,
-      lon: previous.position.lon + displacement * 0.25,
-    };
+        let roll = current.orientation.roll;
+        let pitch = current.orientation.pitch;
+        if (data.gyro) {
+          roll = data.gyro.x;
+          pitch = data.gyro.y;
+        } else if (data.accel) {
+          const ax = data.accel.x;
+          const ay = data.accel.y;
+          const az = data.accel.z;
+          const rollRad = Math.atan2(ay, az);
+          const pitchRad = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
+          roll = this.toDegrees(rollRad);
+          pitch = this.toDegrees(pitchRad);
+        }
+        const accelMagnitude =
+          data.accel != null
+            ? Math.sqrt(data.accel.x ** 2 + data.accel.y ** 2 + data.accel.z ** 2) / 16384
+            : current.acceleration[current.acceleration.length - 1] ?? 0;
 
-    const speed = this.clamp(previous.speed + (Math.random() * 4 - 2), 0, 42);
-    const battery = this.clamp(previous.battery - 0.05, 20, 100);
+        const temperatures: TemperatureReading[] = [
+          { label: 'BME Temp', value: data.bme?.temp_c ?? current.temperatures[0]?.value ?? 0 },
+          { label: 'Thermal Max', value: data.thermal?.tmax ?? current.temperatures[1]?.value ?? 0 },
+        ];
 
-    const accelValue = this.clamp(Math.max(0, speed * 1.4) + Math.random() * 5, 0, 100);
-    const brakeValue = this.clamp(Math.max(0, (40 - speed) * 1.1 + Math.random() * 3), 0, 100);
-    const acceleration = this.shiftAndAppend(previous.acceleration, accelValue);
-    const braking = this.shiftAndAppend(previous.braking, brakeValue);
+        const snapshot: TelemetrySnapshot = {
+          ...current,
+          timestamp: new Date().toISOString(),
+          heading,
+          orientation: {
+            roll,
+            pitch,
+            yaw,
+          },
+          acceleration: this.shiftAndAppend(current.acceleration, accelMagnitude),
+          temperatures,
+        };
 
-    const temperatures = previous.temperatures.map(reading => ({
-      ...reading,
-      value: this.clamp(reading.value + (Math.random() * 1.2 - 0.6), 20, 72),
-    }));
-
-    return {
-      timestamp: new Date().toISOString(),
-      position,
-      heading,
-      orientation,
-      temperatures,
-      acceleration,
-      braking,
-      speed,
-      battery,
-    };
-  }
-
-  private generateSeries(length: number, generator: (value: number) => number): number[] {
-    return Array.from({ length }, (_, index) => generator(index));
+        this.telemetrySubject.next(snapshot);
+      });
   }
 
   private shiftAndAppend(series: number[], value: number): number[] {
@@ -179,4 +191,50 @@ export class TelemetryService {
     }
     return normalized;
   }
+
+  private toDegrees(rad: number): number {
+    return (rad * 180) / Math.PI;
+  }
+
+  private resolveDeviceBaseUrl(): string {
+    if (typeof window === 'undefined') {
+      return 'http://192.168.178.164:5000';
+    }
+
+    const override = (window as { ARGUS_DEVICE_HOST?: string }).ARGUS_DEVICE_HOST;
+    if (override) {
+      return override.replace(/\/+$/, '');
+    }
+
+    const host = window.location.hostname || 'localhost';
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return '/device-api';
+    }
+
+    return `${window.location.protocol}//${host}:5000`;
+  }
 }
+
+interface SensorData {
+  accel?: { x: number; y: number; z: number };
+  gyro?: { x: number; y: number; z: number };
+  mag?: { heading_deg?: number; x: number; y: number; z: number };
+  bme?: {
+    humidity_pct?: number;
+    pressure_hpa?: number;
+    temp_c?: number;
+  };
+  thermal?: {
+    tmax?: number;
+    tmin?: number;
+  };
+}
+
+
+
+
+
+
+
+
+

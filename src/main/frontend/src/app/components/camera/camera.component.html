@@ -1,7 +1,28 @@
 <div class="camera-layout" *ngIf="mainFeed as feed">
   <div class="main-feed">
     <div class="video-wrapper">
-      <video *ngIf="feed.streamUrl; else placeholder" [src]="feed.streamUrl" autoplay muted playsinline></video>
+      <ng-container *ngIf="feed.streamUrl; else placeholder">
+        <ng-container [ngSwitch]="feed.renderMode">
+          <ng-container *ngSwitchCase="'image'">
+            <img [src]="feed.streamUrl" alt="{{ feed.name }}" [ngStyle]="rotationStyle(feed)" />
+          </ng-container>
+          <ng-container *ngSwitchCase="'proxied-image'">
+            <app-stream-bridge
+              [src]="feed.streamUrl || ''"
+              [rotationDegrees]="feed.rotationDegrees"
+            ></app-stream-bridge>
+          </ng-container>
+          <ng-container *ngSwitchDefault>
+            <video
+              [src]="feed.streamUrl"
+              autoplay
+              muted
+              playsinline
+              [ngStyle]="rotationStyle(feed)"
+            ></video>
+          </ng-container>
+        </ng-container>
+      </ng-container>
       <ng-template #placeholder>
         <div class="video-placeholder">{{ feed.placeholder || feed.name }}</div>
       </ng-template>

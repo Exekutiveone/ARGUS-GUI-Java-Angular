@@ -1,0 +1,10 @@
+Kanal  1 : Vorderlenkung
+Kanal  2 : Hinterlenkung
+Kanal  8 : LiDAR-Schwenkmodul
+Kanal 10 : Schwenkmodul Y-Achse
+Kanal 11 : Schwenkmodul X-Achse
+Kanal 12 : Front-Laser
+Kanal 13 : Schwenk-Laser
+Kanal 14 : Schwenk-LED
+Kanal 15 : Front-LED
+

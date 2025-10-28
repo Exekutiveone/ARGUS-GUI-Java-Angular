@@ -1,0 +1,48 @@
+<div class="calibration-panel">
+  <header>
+    <div>
+      <h3>Kalibrierung</h3>
+      <small *ngIf="lastUpdated">Letzte Aktualisierung: {{ lastUpdated | date: 'HH:mm:ss' }}</small>
+    </div>
+    <div class="controls">
+      <div class="countdown" *ngIf="countdownLabel">
+        <span>{{ countdownLabel }}</span>
+      </div>
+      <button type="button" (click)="startCalibration()" [disabled]="running || isStarting">
+        {{ running ? 'Kalibrierung läuft' : 'Kalibrierung starten' }}
+      </button>
+    </div>
+  </header>
+
+  <div class="body-content">
+    <section class="status">
+      <span class="indicator" [class.running]="running"></span>
+      <div class="state-text">
+        <strong *ngIf="running">Kalibrierung aktiv</strong>
+        <strong *ngIf="!running">Bereit</strong>
+        <span *ngIf="status?.result && !isResultObject()">Ergebnis: {{ status?.result }}</span>
+      </div>
+    </section>
+
+    <section class="message" *ngIf="isStarting && !running">
+      <span>Kalibrierung wird gestartet…</span>
+    </section>
+
+    <section class="error" *ngIf="lastError">
+      <span>{{ lastError }}</span>
+    </section>
+
+    <section class="offsets" *ngIf="hasOffsets()">
+      <h4>Offsets</h4>
+      <div class="offset" *ngFor="let item of status?.offsets | keyvalue">
+        <span>{{ item.key }}</span>
+        <strong>{{ item.value | number: '1.2-2' }}</strong>
+      </div>
+    </section>
+
+    <section class="complex-result" *ngIf="isResultObject()">
+      <h4>Ergebnis</h4>
+      <pre>{{ status?.result | json }}</pre>
+    </section>
+  </div>
+</div>

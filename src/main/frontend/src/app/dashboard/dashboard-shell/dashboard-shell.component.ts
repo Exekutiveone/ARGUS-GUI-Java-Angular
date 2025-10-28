@@ -4,6 +4,7 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import { ControlService, DriveCommand } from '../../services/control.service';
 import { TelemetryService, TelemetrySnapshot } from '../../services/telemetry.service';
+import { DeviceUpdateService } from '../../services/device-update.service';
 import { VideoService } from '../../services/video.service';
 import { CameraFeed } from '../../components/camera/camera.component';
 import { Orientation } from '../../components/car-model/car-model.component';
@@ -56,13 +57,38 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   private previousButtonStates: boolean[] = [];
   private cameraKeys = new Set<string>();
   private displayProfileIndex = 0;
+  private lastCameraVector?: { x: number; y: number };
+  private readonly cameraVectorEpsilon = 0.01;
+  private readonly ledChannels = {
+    laserFront: 12,
+    laserSweep: 13,
+    ledSweep: 14,
+    ledFront: 15,
+  };
+  private readonly sweepServoChannels = {
+    pan: 11,
+    tilt: 10,
+  };
+  private readonly servoUpdateIntervalMs = 100;
+  private readonly sweepPanSpeedDegreesPerSecond = 120;
+  private readonly sweepTiltSpeedDegreesPerSecond = 120;
+  private readonly keyboardServoStepDegrees = 4;
+  private sweepPanAngle = 90;
+  private sweepTiltAngle = 90;
+  private lastSentSweepPan = -1;
+  private lastSentSweepTilt = -1;
+  private servoUpdatePending = false;
+  private lastServoPushTimestamp = 0;
 
   constructor(
     private readonly telemetryService: TelemetryService,
     private readonly controlService: ControlService,
     private readonly authService: AuthService,
     private readonly videoService: VideoService,
+    private readonly deviceUpdateService: DeviceUpdateService,
   ) {}
+
+  taskPanelView: 'tasks' | 'calibration' = 'tasks';
 
   get secondaryFeeds(): CameraFeed[] {
     const mainId = this.mainFeed?.id;
@@ -83,6 +109,7 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
       this.orientation = { ...snapshot.orientation };
     });
 
+    this.initialiseSweepServos();
     this.startGamepadPolling();
   }
 
@@ -213,7 +240,9 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
           cameraY: Number(this.clamp(-rightY, -1, 1).toFixed(2)),
         });
 
-        this.controlService.sendCameraVector(this.rightStick.x, -this.rightStick.y);
+        this.emitCameraVector(this.rightStick.x, -this.rightStick.y);
+        this.handleAnalogSweepControl(rightX, rightY, deltaSeconds);
+        this.flushServoUpdates(now);
         this.telemetryService.applyManualInput(this.throttleLevel, this.brakeLevel);
         this.handleButtonEvents(activePad.buttons);
 
@@ -238,10 +267,11 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.rightStick = { x: 0, y: 0 };
         this.previousButtonStates = [];
         this.cameraKeys.clear();
-        this.controlService.sendCameraVector(0, 0);
+        this.emitCameraVector(0, 0);
         this.updateKeyboardStickVisual();
         this.telemetryService.clearManualYaw();
         this.lastGamepadTimestamp = undefined;
+        this.flushServoUpdates(now);
       }
 
       this.gamepadHandle = requestAnimationFrame(poll);
@@ -320,7 +350,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     if (this.controllerConnected) {
       return;
     }
-    this.controlService.sendCameraVector(this.rightStick.x, -this.rightStick.y);
+    this.emitCameraVector(this.rightStick.x, -this.rightStick.y);
+    this.applyKeyboardSweepAdjustment();
   }
 
   private handleButtonEvents(buttons: readonly GamepadButton[]): void {
@@ -382,21 +413,25 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   private toggleLedFront(): void {
     this.ledFrontActive = !this.ledFrontActive;
     this.controlService.toggleLedFront();
+    this.sendLedUpdate(this.ledChannels.ledFront, this.ledFrontActive);
   }
 
   private toggleLedSweep(): void {
     this.ledSweepActive = !this.ledSweepActive;
     this.controlService.toggleLedSweep();
+    this.sendLedUpdate(this.ledChannels.ledSweep, this.ledSweepActive);
   }
 
   private toggleLaserFront(): void {
     this.laserFrontActive = !this.laserFrontActive;
     this.controlService.toggleLaserFront();
+    this.sendLedUpdate(this.ledChannels.laserFront, this.laserFrontActive);
   }
 
   private toggleLaserSweep(): void {
     this.laserSweepActive = !this.laserSweepActive;
     this.controlService.toggleLaserSweep();
+    this.sendLedUpdate(this.ledChannels.laserSweep, this.laserSweepActive);
   }
 
   private adjustLedIntensity(delta: number): void {
@@ -407,6 +442,19 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
 
     this.ledIntensity = next;
     this.controlService.setLedIntensity(this.ledIntensity);
+    this.syncActiveLeds();
+  }
+
+  private sendLedUpdate(channel: number, active: boolean): void {
+    const value = active ? this.ledIntensity : 0;
+    this.deviceUpdateService.sendUpdate(channel, value, 'led').subscribe();
+  }
+
+  private syncActiveLeds(): void {
+    this.sendLedUpdate(this.ledChannels.ledFront, this.ledFrontActive);
+    this.sendLedUpdate(this.ledChannels.ledSweep, this.ledSweepActive);
+    this.sendLedUpdate(this.ledChannels.laserFront, this.laserFrontActive);
+    this.sendLedUpdate(this.ledChannels.laserSweep, this.laserSweepActive);
   }
 
   private advanceDisplayProfile(): void {
@@ -430,4 +478,134 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     }
     return normalized;
   }
+  private getTimestamp(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+
+  private initialiseSweepServos(): void {
+    this.servoUpdatePending = true;
+    this.flushServoUpdates(this.getTimestamp(), true);
+  }
+
+  private handleAnalogSweepControl(panInput: number, tiltInput: number, deltaSeconds: number): void {
+    if (deltaSeconds <= 0) {
+      return;
+    }
+
+    const panDelta = panInput * this.sweepPanSpeedDegreesPerSecond * deltaSeconds;
+    const tiltDelta = -tiltInput * this.sweepTiltSpeedDegreesPerSecond * deltaSeconds;
+
+    if (panDelta === 0 && tiltDelta === 0) {
+      return;
+    }
+
+    this.applySweepAdjustment(panDelta, tiltDelta);
+  }
+
+  private applyKeyboardSweepAdjustment(): void {
+    const panStep = this.rightStick.x * this.keyboardServoStepDegrees;
+    const tiltStep = -this.rightStick.y * this.keyboardServoStepDegrees;
+
+    if (panStep === 0 && tiltStep === 0) {
+      return;
+    }
+
+    const changed = this.applySweepAdjustment(panStep, tiltStep);
+    if (changed) {
+      this.flushServoUpdates(this.getTimestamp(), true);
+    }
+  }
+
+  private applySweepAdjustment(panDelta: number, tiltDelta: number): boolean {
+    let changed = false;
+
+    if (panDelta !== 0) {
+      const nextPan = this.clamp(this.sweepPanAngle + panDelta, 0, 180);
+      if (nextPan !== this.sweepPanAngle) {
+        this.sweepPanAngle = nextPan;
+        changed = true;
+      }
+    }
+
+    if (tiltDelta !== 0) {
+      const nextTilt = this.clamp(this.sweepTiltAngle + tiltDelta, 0, 180);
+      if (nextTilt !== this.sweepTiltAngle) {
+        this.sweepTiltAngle = nextTilt;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.servoUpdatePending = true;
+    }
+    return changed;
+  }
+
+  private flushServoUpdates(timestamp: number, force = false): void {
+    const panValue = Math.round(this.sweepPanAngle);
+    const tiltValue = Math.round(this.sweepTiltAngle);
+
+    const panNeedsUpdate = force || panValue !== this.lastSentSweepPan;
+    const tiltNeedsUpdate = force || tiltValue !== this.lastSentSweepTilt;
+
+    if (!panNeedsUpdate && !tiltNeedsUpdate) {
+      this.servoUpdatePending = false;
+      return;
+    }
+
+    if (!force && !this.servoUpdatePending) {
+      return;
+    }
+
+    if (!force && timestamp - this.lastServoPushTimestamp < this.servoUpdateIntervalMs) {
+      return;
+    }
+
+    if (panNeedsUpdate) {
+      this.sendServoUpdate(this.sweepServoChannels.pan, panValue);
+      this.lastSentSweepPan = panValue;
+    }
+
+    if (tiltNeedsUpdate) {
+      this.sendServoUpdate(this.sweepServoChannels.tilt, tiltValue);
+      this.lastSentSweepTilt = tiltValue;
+    }
+
+    if (panNeedsUpdate || tiltNeedsUpdate) {
+      this.lastServoPushTimestamp = timestamp;
+      this.servoUpdatePending = false;
+    }
+  }
+
+  private sendServoUpdate(channel: number, angle: number): void {
+    const value = Math.round(this.clamp(angle, 0, 180));
+    this.deviceUpdateService.sendUpdate(channel, value, 'servo').subscribe();
+  }
+
+  private emitCameraVector(x: number, y: number): void {
+    if (this.lastCameraVector) {
+      const dx = Math.abs(this.lastCameraVector.x - x);
+      const dy = Math.abs(this.lastCameraVector.y - y);
+      if (dx < this.cameraVectorEpsilon && dy < this.cameraVectorEpsilon) {
+        return;
+      }
+    }
+    this.lastCameraVector = { x, y };
+    this.controlService.sendCameraVector(x, y);
+  }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

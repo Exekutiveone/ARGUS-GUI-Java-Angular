@@ -16,4 +16,11 @@ export class CameraFeedComponent {
       this.activate.emit(this.feed);
     }
   }
+
+  rotationStyle(): Record<string, string> | null {
+    if (!this.feed?.rotationDegrees) {
+      return null;
+    }
+    return { transform: `rotate(${this.feed.rotationDegrees}deg)`, transformOrigin: 'center center' };
+  }
 }

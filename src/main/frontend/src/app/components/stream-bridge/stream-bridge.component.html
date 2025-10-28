@@ -1,0 +1,7 @@
+<img
+  class="stream-frame"
+  *ngIf="proxiedUrl as safeSrc"
+  [src]="safeSrc"
+  [ngStyle]="rotationStyle"
+  alt="Live stream"
+/>

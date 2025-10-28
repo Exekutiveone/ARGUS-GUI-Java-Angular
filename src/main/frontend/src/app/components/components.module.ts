@@ -11,6 +11,8 @@ import { ControlsComponent } from './controls/controls.component';
 import { SensorsComponent } from './sensors/sensors.component';
 import { TasksComponent } from './tasks/tasks.component';
 import { CameraFeedComponent } from './camera-feed/camera-feed.component';
+import { StreamBridgeComponent } from './stream-bridge/stream-bridge.component';
+import { CalibrationComponent } from './calibration/calibration.component';
 
 @NgModule({
   declarations: [
@@ -21,7 +23,9 @@ import { CameraFeedComponent } from './camera-feed/camera-feed.component';
     ControlsComponent,
     SensorsComponent,
     TasksComponent,
-    CameraFeedComponent
+    CameraFeedComponent,
+    StreamBridgeComponent,
+    CalibrationComponent,
   ],
   imports: [
     CommonModule,
@@ -37,6 +41,8 @@ import { CameraFeedComponent } from './camera-feed/camera-feed.component';
     SensorsComponent,
     TasksComponent,
     CameraFeedComponent,
+    StreamBridgeComponent,
+    CalibrationComponent,
   ]
 })
 export class ComponentsModule { }

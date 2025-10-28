@@ -1,5 +1,6 @@
 import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import Chart from 'chart.js/auto';
+import type { ChartOptions } from 'chart.js';
 
 export interface TemperatureReading {
   label: string;
@@ -21,8 +22,8 @@ export class SensorsComponent implements AfterViewInit, OnChanges, OnDestroy {
   @ViewChild('accCanvas') private readonly accCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('brakeCanvas') private readonly brakeCanvas?: ElementRef<HTMLCanvasElement>;
 
-  private accelerationChart?: Chart;
-  private brakeChart?: Chart;
+  private accelerationChart?: Chart<'line'>;
+  private brakeChart?: Chart<'line'>;
 
   ngAfterViewInit(): void {
     this.initCharts();
@@ -86,14 +87,12 @@ export class SensorsComponent implements AfterViewInit, OnChanges, OnDestroy {
     if (this.accelerationChart) {
       this.accelerationChart.data.labels = this.generateLabels(this.accelerationSeries.length);
       this.accelerationChart.data.datasets[0].data = this.accelerationSeries;
-      this.updateScale(this.accelerationChart);
       this.accelerationChart.update();
     }
 
     if (this.brakeChart) {
       this.brakeChart.data.labels = this.generateLabels(this.brakeSeries.length);
       this.brakeChart.data.datasets[0].data = this.brakeSeries;
-      this.updateScale(this.brakeChart);
       this.brakeChart.update();
     }
   }
@@ -102,24 +101,7 @@ export class SensorsComponent implements AfterViewInit, OnChanges, OnDestroy {
     return Array.from({ length }, (_, index) => `${index + 1}`);
   }
 
-  private updateScale(chart: Chart): void {
-    const axisMax = 200;
-    const step = 20;
-    const scales = (chart.options.scales = chart.options.scales ?? {});
-    const yScale = (scales['y'] = scales['y'] ?? {});
-
-    yScale.min = 0;
-    yScale.max = axisMax;
-    yScale.ticks = {
-      ...(yScale.ticks ?? {}),
-      stepSize: step,
-      color: 'rgba(224, 224, 224, 0.6)',
-      font: { size: 11 },
-    };
-    yScale.grid = yScale.grid ?? { color: 'rgba(224, 224, 224, 0.08)' };
-  }
-
-  private get chartOptions() {
+  private get chartOptions(): ChartOptions<'line'> {
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -129,7 +111,13 @@ export class SensorsComponent implements AfterViewInit, OnChanges, OnDestroy {
           grid: { display: false },
         },
         y: {
-          ticks: {},
+          min: 0,
+          max: 200,
+          ticks: {
+            stepSize: 20,
+            color: 'rgba(224, 224, 224, 0.6)',
+            font: { size: 11 },
+          },
           grid: {
             color: 'rgba(224, 224, 224, 0.08)',
           },
@@ -147,6 +135,6 @@ export class SensorsComponent implements AfterViewInit, OnChanges, OnDestroy {
           bodyColor: '#e0e0e0',
         },
       },
-    } as const;
+    };
   }
 }

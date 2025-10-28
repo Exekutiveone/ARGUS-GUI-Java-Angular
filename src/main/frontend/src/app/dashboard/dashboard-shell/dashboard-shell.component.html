@@ -35,7 +35,17 @@
     </section>
 
     <section class="panel tasks">
-      <app-tasks [tasks]="tasks"></app-tasks>
+      <div class="tasks-switch">
+        <label for="tasks-select">Ansicht</label>
+        <select id="tasks-select" [(ngModel)]="taskPanelView">
+          <option value="tasks">Aufgaben</option>
+          <option value="calibration">Kalibrierung</option>
+        </select>
+      </div>
+      <div class="tasks-body" [ngSwitch]="taskPanelView">
+        <app-tasks *ngSwitchCase="'tasks'" [tasks]="tasks"></app-tasks>
+        <app-calibration *ngSwitchCase="'calibration'"></app-calibration>
+      </div>
     </section>
 
     <section class="panel controls">
@@ -79,3 +89,5 @@
 <ng-template #cameraFallback>
   <div class="camera-placeholder">Kamerafeeds werden geladen…</div>
 </ng-template>
+
+

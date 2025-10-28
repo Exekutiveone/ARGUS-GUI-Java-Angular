@@ -1,0 +1,12 @@
+{
+  "/device-api": {
+    "target": "http://192.168.178.164:5000",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info",
+    "pathRewrite": {
+      "^/device-api": ""
+    }
+  }
+}
+

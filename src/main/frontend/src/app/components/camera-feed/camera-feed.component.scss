@@ -25,18 +25,34 @@
 .frame {
   flex: 1;
   background: #080808;
-  display: grid;
-  place-items: center;
+  position: relative;
+  overflow: hidden;
 
   video,
+  img,
   .video-placeholder {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
+
+  app-stream-bridge {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  video,
+  img,
+  app-stream-bridge {
+    position: absolute;
+    inset: 0;
+  }
 }
 
 .video-placeholder {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   color: rgba(224, 224, 224, 0.7);

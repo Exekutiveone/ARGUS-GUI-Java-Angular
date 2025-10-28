@@ -172,7 +172,7 @@ export class CarModelComponent implements AfterViewInit, OnChanges, OnDestroy {
       undefined,
       error => {
         console.error('Failed to load car STL', error);
-      }
+      },
     );
   }
 }
