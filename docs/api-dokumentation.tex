@@ -1,0 +1,366 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{geometry}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{listings}
+\geometry{margin=2.5cm}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+\title{ARGUS Device Bridge -- API Dokumentation}
+\author{Projekt ARGUS}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Überblick}
+Der ARGUS Device Bridge Server stellt eine REST-Schnittstelle, zwei WebSocket-Endpunkte sowie
+ einen MJPEG-Proxy bereit. Die Schnittstellen dienen der Authentifizierung, der Übermittlung von
+ Steuerkommandos und Betriebsmodi sowie der Bereitstellung von Telemetrie- und Videodaten.
+ Alle HTTP-Endpunkte verwenden JSON als Austauschformat, sofern nicht anders angegeben.
+
+\section{REST-API}
+\subsection{Authentifizierung}
+\begin{longtable}{p{3.2cm}p{3cm}p{7.5cm}}
+\textbf{Methode} & \textbf{Pfad} & \textbf{Beschreibung}\\\hline
+POST & \texttt{/api/auth/login} & Validiert die Anmeldedaten und liefert einen temporären Token.\\
+\end{longtable}
+
+\paragraph{Request}
+\begin{lstlisting}[language=json]
+{
+  "username": "pilot",
+  "password": "geheim"
+}
+\end{lstlisting}
+
+\paragraph{Beispielanfrage (curl)}
+\begin{lstlisting}[language=bash]
+curl -X POST http://localhost:4800/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+        "username": "pilot",
+        "password": "geheim"
+      }'
+\end{lstlisting}
+
+Ungültige Anfragen (fehlende Felder, leere Zeichenketten) werden mit HTTP~400 beantwortet.
+
+\paragraph{Response}
+\begin{lstlisting}[language=json]
+{
+  "token": "0d7c0c63-2f34-4c9f-9d9d-6e0e2e58e6c1",
+  "expiresIn": 3600
+}
+\end{lstlisting}
+
+Der Token ist ein zufällig generierter UUID-String ohne weitere Bedeutung.
+
+\subsection{Steuerung und Konfiguration}
+Alle Endpunkte in diesem Abschnitt befinden sich unter dem Präfix \texttt{/api}.
+\begin{longtable}{p{3.2cm}p{3cm}p{7.5cm}}
+\textbf{Methode} & \textbf{Pfad} & \textbf{Beschreibung}\\\hline
+POST & \texttt{/api/control} & Entgegennahme generischer Steuerbefehle bzw. Kamera-Pan/Tilt-Korrekturen.\\
+POST & \texttt{/api/mode} & Änderung des Fahrmodus.\\
+POST & \texttt{/api/steering} & Änderung des Lenkmodus.\\
+GET & \texttt{/api/telemetry} & Liefert einen synthetischen Telemetrie-Snapshot.\\
+\end{longtable}
+
+\paragraph{/api/control}
+Es werden zwei Nutzlastvarianten unterschieden:
+\begin{itemize}
+  \item Allgemeiner Steuerbefehl:
+\begin{lstlisting}[language=json]
+{
+  "source": "joystick",
+  "command": "throttle",
+  "value": 0.42
+}
+\end{lstlisting}
+  \item Kameraanpassung:
+\begin{lstlisting}[language=json]
+{
+  "action": "camera-pan-tilt",
+  "panDelta": 1.5,
+  "tiltDelta": -0.5
+}
+\end{lstlisting}
+\end{itemize}
+Die API bestätigt Anfragen mit HTTP~202 (Accepted), eine weitergehende Validierung findet aktuell nicht statt.
+
+\paragraph{Beispielanfragen (curl)}
+\begin{lstlisting}[language=bash]
+# Generischer Steuerbefehl
+curl -X POST http://localhost:4800/api/control \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "source": "joystick",
+        "command": "throttle",
+        "value": 0.42
+      }'
+
+# Kameraausrichtung korrigieren
+curl -X POST http://localhost:4800/api/control \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "action": "camera-pan-tilt",
+        "panDelta": 1.5,
+        "tiltDelta": -0.5
+      }'
+\end{lstlisting}
+
+\paragraph{/api/mode}
+\begin{lstlisting}[language=json]
+{
+  "mode": "autonomous"
+}
+\end{lstlisting}
+Der Endpunkt quittiert die Anfrage mit HTTP~202. Der String \texttt{mode} wird protokolliert, jedoch nicht validiert.
+
+\paragraph{Beispielanfrage (curl)}
+\begin{lstlisting}[language=bash]
+curl -X POST http://localhost:4800/api/mode \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{ "mode": "autonomous" }'
+\end{lstlisting}
+
+\paragraph{/api/steering}
+\begin{lstlisting}[language=json]
+{
+  "mode": "differential"
+}
+\end{lstlisting}
+Analog zu \texttt{/api/mode} liefert der Server HTTP~202 als Bestätigung.
+
+\paragraph{Beispielanfrage (curl)}
+\begin{lstlisting}[language=bash]
+curl -X POST http://localhost:4800/api/steering \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{ "mode": "differential" }'
+\end{lstlisting}
+
+\paragraph{/api/telemetry}
+Antwortpayload gemäß Record \texttt{TelemetrySnapshot}:
+\begin{lstlisting}[language=json]
+{
+  "gps": { "lat": 52.5205, "lng": 13.4049 },
+  "heading": 123.45,
+  "orientation": { "roll": 1.2, "pitch": -0.8, "yaw": 45.6 },
+  "throttle": 0.378,
+  "brake": 0.125,
+  "temps": [
+    { "label": "Temp #1", "value": 35.2 },
+    { "label": "Temp #3", "value": 32.7 }
+  ],
+  "accelerationHistory": [0.5, 0.7, ...],
+  "brakingHistory": [0.1, 0.0, ...],
+  "timestamp": 1715527950123
+}
+\end{lstlisting}
+Die Messwerte werden vom Service \texttt{TelemetryGenerator} synthetisch erzeugt und bei jedem Abruf aktualisiert.
+
+\paragraph{Beispielanfrage (curl)}
+\begin{lstlisting}[language=bash]
+curl -X GET "http://localhost:4800/api/telemetry" \
+  -H "Authorization: Bearer ${TOKEN}"
+\end{lstlisting}
+
+\subsection{Video-Proxy}
+\begin{longtable}{p{3.2cm}p{3cm}p{7.5cm}}
+\textbf{Methode} & \textbf{Pfad} & \textbf{Beschreibung}\\\hline
+GET & \texttt{/stream-proxy?target=<URL>} & Reicht MJPEG-Streams von HTTP/HTTPS-Zielen durch.\\
+\end{longtable}
+Der Zielparameter \texttt{target} muss eine absolute URL mit Schema \texttt{http} oder \texttt{https} sein.
+Fehler des Upstream-Servers werden als HTTP~502 (Bad Gateway) an den Client zurückgegeben.
+
+\paragraph{Beispielanfrage (curl)}
+\begin{lstlisting}[language=bash]
+curl -G "http://localhost:4800/stream-proxy" \
+  --data-urlencode "target=http://192.168.10.50:8080/stream.mjpg" \
+  -o camera.mjpg
+\end{lstlisting}
+
+\section{WebSocket-Schnittstellen}
+\begin{longtable}{p{4cm}p{9cm}}
+\textbf{Pfad} & \textbf{Beschreibung}\\\hline
+\texttt{/ws/telemetry} & Broadcastet jede Sekunde einen JSON-codierten \texttt{TelemetrySnapshot} an alle verbundenen Clients. Beim Verbindungsaufbau erhält der Client sofort einen Start-Snapshot.\\
+\texttt{/ws/control} & Nimmt JSON-Steuerkommandos entgegen. Der erwartete Aufbau entspricht den Nutzlasten von \texttt{/api/control}.\\
+\end{longtable}
+
+\paragraph{Beispiel (WebSocket Client in JavaScript)}
+\begin{lstlisting}[language=JavaScript]
+// Telemetrie abonnieren
+const telemetrySocket = new WebSocket('ws://localhost:4800/ws/telemetry');
+telemetrySocket.onmessage = event => {
+  const snapshot = JSON.parse(event.data);
+  console.log('Heading', snapshot.heading);
+};
+
+// Steuerbefehl senden
+const controlSocket = new WebSocket('ws://localhost:4800/ws/control');
+controlSocket.onopen = () => {
+  controlSocket.send(JSON.stringify({
+    type: 'drive',
+    keys: ['w'],
+    driveMode: 'Normal',
+    steeringMode: '4WD'
+  }));
+};
+\end{lstlisting}
+
+Die WebSocket-Verbindungen erlauben Cross-Origin-Zugriffe (\texttt{*}). Fehlgeschlagene Sendungen werden serverseitig protokolliert.
+
+\section{Domänenmodelle}
+\begin{longtable}{p{4cm}p{9cm}}
+\textbf{Record} & \textbf{Felder}\\\hline
+\texttt{AuthRequest} & \texttt{username} (String), \texttt{password} (String)\\
+\texttt{AuthResponse} & \texttt{token} (String), \texttt{expiresIn} (long, Sekunden)\\
+\texttt{ModeChangeRequest} & \texttt{mode} (String)\\
+\texttt{SteeringModeRequest} & \texttt{mode} (String)\\
+\texttt{ControlCommand} & \texttt{source} (String), \texttt{command} (String), \texttt{value} (Double), \texttt{timestamp} (long, Millisekunden)\\
+\texttt{CameraAdjustment} & \texttt{action} (String), \texttt{panDelta} (double), \texttt{tiltDelta} (double), \texttt{timestamp} (long)\\
+\texttt{TelemetrySnapshot} & \texttt{gps} (\texttt{GpsCoordinate}), \texttt{heading} (double), \texttt{orientation} (\texttt{Orientation}), \texttt{throttle} (double), \texttt{brake} (double), \texttt{temps} (Liste \texttt{TemperatureReading}), \texttt{accelerationHistory} (Liste double), \texttt{brakingHistory} (Liste double), \texttt{timestamp} (long)\\
+\texttt{GpsCoordinate} & \texttt{lat} (double), \texttt{lng} (double)\\
+\texttt{Orientation} & \texttt{roll} (double), \texttt{pitch} (double), \texttt{yaw} (double)\\
+\texttt{TemperatureReading} & \texttt{label} (String), \texttt{value} (double)\\
+\end{longtable}
+
+\section{Hardware-Anbindung}
+\subsection{PWM- und Servokanäle}
+Die Ausgänge des PCA9685 werden gemäß Tabelle~\ref{tab:pwm} für Aktoren und Leuchtmittel
+belegt. Die Kanalnummer entspricht der physischen Portnummer am Treiber.
+
+\begin{longtable}{p{3cm}p{10cm}}
+\caption{Belegung der PWM-Kanäle}\label{tab:pwm}\\
+\textbf{Kanal} & \textbf{Funktion}\\\hline
+1 & Vorderachslenkung\\
+2 & Hinterachslenkung\\
+8 & LiDAR-Schwenkmodul\\
+10 & Schwenkmodul Y-Achse\\
+11 & Schwenkmodul X-Achse\\
+12 & Front-Laser\\
+13 & Schwenk-Laser\\
+14 & Schwenk-LED\\
+15 & Front-LED\\
+\end{longtable}
+
+Die Kanalzuordnung wird sowohl in der Python-Steuerlogik als auch in der Dashboard-
+Komponente genutzt, um LED- und Laserfunktionen gezielt anzusteuern.
+
+\subsection{I2C-Multiplexer und Sensoren}
+Die Sensorik wird über einen TCA9548A-Multiplexer am Bus~\texttt{I2C\_BUS~1} verteilt.
+Tabelle~\ref{tab:i2c} fasst die relevanten Adressen und Multiplexer-Kanäle zusammen.
+
+\begin{longtable}{p{4cm}p{2.5cm}p{2cm}p{5cm}}
+\caption{I2C-Geräte und Multiplexer-Kanäle}\label{tab:i2c}\\
+\textbf{Bauteil} & \textbf{Adresse} & \textbf{MUX-Kanal} & \textbf{Bemerkung}\\\hline
+TCA9548A Multiplexer & \texttt{0x70} & -- & Verteilt den Bus auf acht Kanäle\\
+PCA9685 PWM-Treiber & \texttt{0x40} & 3 & Liefert PWM-Signale für Servos/LEDs (200~Hz)\\
+MLX90640 Wärmebildsensor & \texttt{0x33} & 1 & Liest 24\,\times\,32 Temperaturpixel aus\\
+BME280 Umweltsensor & \texttt{0x76} & 4 & Temperatur, Luftdruck und Luftfeuchte\\
+QMC5883L Kompass & \texttt{0x0D} & 6 & Magnetometer zur Kursberechnung\\
+BMI160/MPU9250 IMU & \texttt{0x68} & 7 & Beschleunigungs- und Gyrodaten\\
+\end{longtable}
+
+Der Multiplexer-Kanal wird vor jedem Zugriff gesetzt (\texttt{set\_mux\_channel}), um den
+jeweiligen Sensor exklusiv zu adressieren. Für den PCA9685 wird beim Start eine
+Frequenz von 200~Hz eingestellt, um Servos mit stabilen Pulsbreiten zu versorgen.
+
+\section{Web-GUI Komponentenübersicht}
+Das Angular-Frontend besteht aus modularen Komponenten, die Telemetriedaten,
+Steuerinformationen und Videofeeds darstellen. Tabelle~\ref{tab:webui} skizziert die wichtigsten
+Bestandteile und deren Aufgaben.
+
+\begin{longtable}{p{4cm}p{9cm}}
+\caption{Weboberflächen-Komponenten}\label{tab:webui}\\
+\textbf{Komponente} & \textbf{Aufgabe}\\\hline
+\texttt{LoginComponent} & Formularbasierte Authentifizierung mit Validierung und Weiterleitung nach erfolgreichem Login.\\
+\texttt{DashboardShellComponent} & Orchestriert Telemetrie-Streams, Tastatur-/Gamepad-Eingaben sowie Kamera- und LED-Steuerung.\\
+\texttt{CameraComponent} & Zeigt den Hauptvideofeed und wählbare Sekundärstreams inkl. Rotationskorrektur.\\
+\texttt{CameraFeedComponent} & Kartenansicht einzelner Streams, inklusive Stream-Proxy-Unterstützung und Platzhalteranzeige.\\
+\texttt{StreamBridgeComponent} & Baut MJPEG-Streams über den Backend-Proxy auf und handhabt Rotationen/Abmeldung beim Schließen.\\
+\texttt{SensorsComponent} & Visualisiert Temperaturwerte sowie Beschleunigungs- und Bremsverläufe via Chart.js.\\
+\texttt{ControlsComponent} & Stellt Tastatur- und Controllerzustände, Fahr-/Lenkmodi und Licht-/Laserindikatoren dar.\\
+\texttt{CarModelComponent} & Rendert das 3D-Fahrzeugmodell (Three.js) und setzt Roll-, Nick- und Gierwinkel aus der Telemetrie um.\\
+\texttt{CompassComponent} & Zeigt Kurswinkel samt Himmelsrichtungslabel an.\\
+\texttt{MapComponent} & Bindet eine Leaflet-Karte ein, die die aktuelle GPS-Position markiert.\\
+\texttt{TasksComponent} & Listet Missions- oder Systemaufgaben mit Status und Auswahlereignis auf.\\
+\texttt{CalibrationComponent} & Startet Sensorkalibrierungen und pollt Status/ETA inklusive Fehlerbehandlung.\\
+\end{longtable}
+
+
+\section{Eingabegerätekonfiguration}
+
+\subsection{Tastaturbelegung}
+Die Dashboard-Shell nimmt Tastatureingaben direkt über globale Event-Listener entgegen. Tabelle~\ref{tab:keyboard}
+führt alle belegten Tasten auf.
+
+\begin{longtable}{p{3cm}p{10cm}}
+\caption{Tastaturkürzel}\label{tab:keyboard}\\
+\textbf{Taste(n)} & \textbf{Funktion}\\\hline
+\texttt{W} & Volle Beschleunigung vorwärts; setzt den virtuellen Gaswert auf 100~\%.\\
+\texttt{S} & Sofortiges Bremsen; setzt den Bremswert auf 100~\%.\\
+\texttt{A} & Lenkung nach links (virtueller Joystick-X-Wert negativ).\\
+\texttt{D} & Lenkung nach rechts (virtueller Joystick-X-Wert positiv).\\
+\texttt{W}+\texttt{A}/\texttt{D} & Kombinierte Vorwärtsfahrt mit gleichzeitiger Kurvenfahrt.\\
+Pfeiltasten \texttt{↑}/\texttt{↓} & Kamera-Neigung erhöhen bzw. senken (je 4° pro Impuls).\\
+Pfeiltasten \texttt{←}/\texttt{→} & Kamera-Schwenk nach links bzw. rechts (je 4° pro Impuls).\\
+\end{longtable}
+
+Solange kein Gamepad erkannt wird, visualisiert das Frontend die Tastatureingaben im linken bzw. rechten Stick und
+übermittelt die resultierenden Vektoren an die Steuer-API.
+
+\subsection{Gamepad-Belegung}
+Bei verbundenem Gamepad werden analoge Achsen, Trigger und Buttons automatisch ausgewertet. Tabelle~\ref{tab:gamepad}
+zeigt die Zuordnung für gängige XInput-/DualShock-Layouts.
+
+\begin{longtable}{p{4cm}p{9cm}}
+\caption{Gamepad-Steuerung}\label{tab:gamepad}\\
+\textbf{Bedienelement} & \textbf{Funktion}\\\hline
+Linker Stick (Y) & Vorwärts-/Rückwärtsfahrt; negative Y-Werte führen zu Vortrieb.\\
+Linker Stick (X) & Lenkung/Yaw; wird zusätzlich zur Telemetrie als manueller Yaw-Winkel angewandt.\\
+Rechter Stick (X/Y) & Kamera-Schwenk und -Neigung; kontinuierliche Servo-Nachführung.\\
+Trigger L2/R2 & Bremse bzw. Gas (0--100~\% je nach Durchdrückung).\\
+Button~0 (A/\,Cross) & Front-LED umschalten.\\
+Button~1 (B/\,Circle) & Schwenk-LED umschalten.\\
+Button~2 (X/\,Square) & Front-Laser umschalten.\\
+Button~3 (Y/\,Triangle) & Schwenk-Laser umschalten.\\
+Button~4 (LB/L1) & Nächsten Lenkmodus auswählen.\\
+Button~5 (RB/R1) & Nächsten Fahrmodus auswählen.\\
+Button~12 (D-Pad oben) & LED-Intensität um +10~\% erhöhen.\\
+Button~13 (D-Pad unten) & LED-Intensität um -10~\% verringern.\\
+Button~17 (Share/Touchpad) & Anzeigeprofil (Overview/Navigation/Diagnostics) zyklisch wechseln.\\
+\end{longtable}
+
+Ist kein Gamepad aktiv, werden Kamera- und Servo-Bewegungen ausschließlich über Tastaturbefehle abgewickelt; bei aktiver
+Gamepad-Verbindung haben die analogen Achsen Priorität.
+
+
+
+\section{Antwortcodes}
+Sofern nicht anders beschrieben, folgen die Endpunkte folgenden Antwortcodes:
+\begin{itemize}
+  \item \textbf{200 OK}: Erfolgreiche GET-Anfrage (z.\,B. \texttt{/api/telemetry}).
+  \item \textbf{202 Accepted}: Steuerbefehle wurden entgegengenommen (\texttt{/api/control}, \texttt{/api/mode}, \texttt{/api/steering}).
+  \item \textbf{400 Bad Request}: Pflichtparameter fehlen oder sind ungültig (z.\,B. \texttt{/api/auth/login}, \texttt{/stream-proxy}).
+  \item \textbf{502 Bad Gateway}: Der Upstream-Stream lieferte einen Fehler, der an den Client weitergereicht wird (\texttt{/stream-proxy}).
+\end{itemize}
+
+\section{Beispiel-Workflow}
+\begin{enumerate}
+  \item \textbf{Login}: Client ruft \texttt{POST /api/auth/login} auf und speichert das erhaltene Token.
+  \item \textbf{Telemetrie abonnieren}: WebSocket-Verbindung zu \texttt{/ws/telemetry} aufbauen, um kontinuierliche Daten zu erhalten.
+  \item \textbf{Steuerbefehle senden}: Einzelne Kommandos via \texttt{POST /api/control} oder persistent über \texttt{/ws/control} übermitteln.
+  \item \textbf{Videostream nutzen}: Mit \texttt{/stream-proxy} einen MJPEG-Stream einer externen Kamera durchreichen.
+\end{enumerate}
+
+\end{document}
