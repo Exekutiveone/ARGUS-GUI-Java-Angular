@@ -111,6 +111,22 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   private readonly steeringRangeDegrees = 45;
   private readonly steeringAngleEpsilon = 0.5;
   private readonly steeringUpdateIntervalMs = 60;
+  private readonly escChannel = 3;
+  private readonly escNeutralDegrees = 90;
+  private readonly escFullScaleDegrees = 45;
+  private readonly escDeadzonePercent = 1;
+  private readonly escUpdateIntervalMs = 60;
+  private readonly escBrakePulseDurationMs = 200;
+  private escState: 'neutral' | 'forward' | 'brakePulse' | 'reverse' = 'neutral';
+  private escNeedsBrakePulse = false;
+  private escDesiredPercent = 0;
+  private escPendingPercent = 0;
+  private escPendingAngle = this.escNeutralDegrees;
+  private escUpdatePending = false;
+  private lastEscPushTimestamp = 0;
+  private lastEscAngleSent = -1;
+  private escLastCommandPercent = 0;
+  private brakePulseTimer?: number;
 
   constructor(
     private readonly telemetryService: TelemetryService,
@@ -154,6 +170,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     });
 
     this.initialiseSweepServos();
+    this.initialiseSteeringServos();
+    this.initialiseEsc();
     this.startGamepadPolling();
   }
 
@@ -220,6 +238,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   changeSteeringMode(mode: string): void {
     this.steeringMode = mode;
     this.controlService.setSteeringMode(mode);
+    this.applySteeringFromInput(this.leftStick.x);
+    this.flushSteeringUpdates(this.getTimestamp(), true);
   }
 
   selectCamera(feed: CameraFeed): void {
@@ -306,6 +326,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.brakeLevel = Math.round(brake * 100);
         this.leftStick = { x: Number(this.clamp(leftX, -1, 1).toFixed(2)), y: Number(this.clamp(leftY, -1, 1).toFixed(2)) };
         this.rightStick = { x: Number(this.clamp(rightX, -1, 1).toFixed(2)), y: Number(this.clamp(rightY, -1, 1).toFixed(2)) };
+        this.applySteeringFromInput(this.clamp(leftX, -1, 1));
+        this.updateEscCommand(now);
 
         this.controlService.sendGamepadCommand({
           throttle: this.throttleLevel,
@@ -319,6 +341,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.emitCameraVector(this.rightStick.x, -this.rightStick.y);
         this.handleAnalogSweepControl(rightX, rightY, deltaSeconds);
         this.flushServoUpdates(now);
+        this.flushSteeringUpdates(now);
+        this.flushEscUpdates(now);
         this.telemetryService.applyManualInput(this.throttleLevel, this.brakeLevel);
         this.handleButtonEvents(activePad.buttons);
       } else {
@@ -330,13 +354,17 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
         this.lastManualBrake = -1;
         this.syncManualInput();
         this.leftStick = { x: 0, y: 0 };
+        this.applySteeringFromInput(0);
         this.rightStick = { x: 0, y: 0 };
         this.previousButtonStates = [];
         this.cameraKeys.clear();
         this.emitCameraVector(0, 0);
         this.updateKeyboardStickVisual();
         this.lastGamepadTimestamp = undefined;
+        this.updateEscCommand(now);
         this.flushServoUpdates(now);
+        this.flushSteeringUpdates(now, true);
+        this.flushEscUpdates(now, true);
       }
 
       this.gamepadHandle = requestAnimationFrame(poll);
@@ -376,6 +404,11 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
 
     if (magnitude === 0) {
       this.leftStick = { x: 0, y: 0 };
+      const timestamp = this.getTimestamp();
+      this.applySteeringFromInput(0);
+      this.flushSteeringUpdates(timestamp);
+      this.updateEscCommand(timestamp);
+      this.flushEscUpdates(timestamp);
       return;
     }
 
@@ -385,6 +418,11 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
       x: Number(normalizedX.toFixed(2)),
       y: Number(normalizedY.toFixed(2)),
     };
+    const timestamp = this.getTimestamp();
+    this.applySteeringFromInput(this.leftStick.x);
+    this.flushSteeringUpdates(timestamp);
+    this.updateEscCommand(timestamp);
+    this.flushEscUpdates(timestamp);
   }
 
   private updateKeyboardCameraStick(): void {
@@ -520,10 +558,217 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   }
 
   private syncActiveLeds(): void {
-    this.sendLedUpdate(this.ledChannels.ledFront, this.ledFrontActive);
-    this.sendLedUpdate(this.ledChannels.ledSweep, this.ledSweepActive);
-    this.sendLedUpdate(this.ledChannels.laserFront, this.laserFrontActive);
-    this.sendLedUpdate(this.ledChannels.laserSweep, this.laserSweepActive);
+   this.sendLedUpdate(this.ledChannels.ledFront, this.ledFrontActive);
+   this.sendLedUpdate(this.ledChannels.ledSweep, this.ledSweepActive);
+   this.sendLedUpdate(this.ledChannels.laserFront, this.laserFrontActive);
+   this.sendLedUpdate(this.ledChannels.laserSweep, this.laserSweepActive);
+ }
+
+  private initialiseSteeringServos(): void {
+    this.applySteeringFromInput(0);
+    this.flushSteeringUpdates(this.getTimestamp(), true);
+  }
+
+  private initialiseEsc(): void {
+    this.escState = 'neutral';
+    this.escNeedsBrakePulse = false;
+    this.escDesiredPercent = 0;
+    this.queueEscPercent(0, true, this.getTimestamp());
+  }
+
+  private applySteeringFromInput(rawInput: number): void {
+    const normalized = this.clamp(rawInput, -1, 1);
+    const frontTarget = this.clamp(
+      this.steeringCenterDegrees + normalized * this.steeringRangeDegrees,
+      this.steeringCenterDegrees - this.steeringRangeDegrees,
+      this.steeringCenterDegrees + this.steeringRangeDegrees,
+    );
+    const rearInput = this.steeringMode === '4WD' ? -normalized : 0;
+    const rearTarget = this.clamp(
+      this.steeringCenterDegrees + rearInput * this.steeringRangeDegrees,
+      this.steeringCenterDegrees - this.steeringRangeDegrees,
+      this.steeringCenterDegrees + this.steeringRangeDegrees,
+    );
+
+    const frontChanged = Math.abs(frontTarget - this.steeringAngleFront) > this.steeringAngleEpsilon;
+    const rearChanged = Math.abs(rearTarget - this.steeringAngleRear) > this.steeringAngleEpsilon;
+
+    if (frontChanged) {
+      this.steeringAngleFront = frontTarget;
+    }
+    if (rearChanged) {
+      this.steeringAngleRear = rearTarget;
+    }
+
+    if (frontChanged || rearChanged) {
+      this.steeringUpdatePending = true;
+    }
+  }
+
+  private flushSteeringUpdates(timestamp: number, force = false): void {
+    const frontValue = Math.round(this.clamp(this.steeringAngleFront, 0, 180));
+    const rearValue = Math.round(this.clamp(this.steeringAngleRear, 0, 180));
+
+    const frontNeedsUpdate = force || frontValue !== this.lastSentSteeringFront;
+    const rearNeedsUpdate = force || rearValue !== this.lastSentSteeringRear;
+
+    if (!frontNeedsUpdate && !rearNeedsUpdate) {
+      this.steeringUpdatePending = false;
+      return;
+    }
+
+    if (!force && !this.steeringUpdatePending) {
+      return;
+    }
+
+    if (!force && timestamp - this.lastSteeringPushTimestamp < this.steeringUpdateIntervalMs) {
+      return;
+    }
+
+    if (frontNeedsUpdate) {
+      this.sendServoUpdate(this.steeringServoChannels.front, frontValue);
+      this.lastSentSteeringFront = frontValue;
+    }
+
+    if (rearNeedsUpdate) {
+      this.sendServoUpdate(this.steeringServoChannels.rear, rearValue);
+      this.lastSentSteeringRear = rearValue;
+    }
+
+    if (frontNeedsUpdate || rearNeedsUpdate) {
+      this.lastSteeringPushTimestamp = timestamp;
+      this.steeringUpdatePending = false;
+    }
+  }
+
+  private updateEscCommand(timestamp: number): void {
+    let desiredPercent = 0;
+
+    if (this.brakeLevel > 0 && this.brakeLevel >= this.throttleLevel) {
+      desiredPercent = -this.brakeLevel;
+    } else if (this.throttleLevel > 0) {
+      desiredPercent = this.throttleLevel;
+    } else {
+      const forwardAxis = this.clamp(-this.leftStick.y, -1, 1);
+      desiredPercent = Math.round(forwardAxis * 100);
+    }
+
+    if (Math.abs(desiredPercent) <= this.escDeadzonePercent) {
+      desiredPercent = 0;
+    }
+
+    this.applyEscInput(desiredPercent, timestamp);
+  }
+
+  private applyEscInput(percent: number, timestamp: number): void {
+    const clamped = Math.round(this.clamp(percent, -100, 100));
+    this.escDesiredPercent = clamped;
+
+    if (clamped === 0) {
+      this.cancelBrakePulse();
+      this.escState = 'neutral';
+      this.queueEscPercent(0, false, timestamp);
+      return;
+    }
+
+    if (clamped > 0) {
+      this.cancelBrakePulse();
+      this.escState = 'forward';
+      this.escNeedsBrakePulse = true;
+      this.queueEscPercent(clamped, false, timestamp);
+      return;
+    }
+
+    if (this.escNeedsBrakePulse && this.escState !== 'brakePulse') {
+      this.startBrakePulse(timestamp);
+      return;
+    }
+
+    if (this.escState === 'brakePulse') {
+      return;
+    }
+
+    this.escState = 'reverse';
+    this.escNeedsBrakePulse = false;
+    this.queueEscPercent(clamped, false, timestamp);
+  }
+
+  private startBrakePulse(timestamp: number): void {
+    this.cancelBrakePulse();
+    this.escState = 'brakePulse';
+    this.escNeedsBrakePulse = false;
+    this.queueEscPercent(-100, true, timestamp);
+
+    if (typeof window !== 'undefined') {
+      this.brakePulseTimer = window.setTimeout(() => {
+        this.brakePulseTimer = undefined;
+        const now = this.getTimestamp();
+        if (this.escDesiredPercent === 0) {
+          this.escState = 'neutral';
+          this.queueEscPercent(0, true, now);
+        } else {
+          this.escState = 'reverse';
+          this.queueEscPercent(this.escDesiredPercent, true, now);
+        }
+      }, this.escBrakePulseDurationMs);
+    } else {
+      this.escState = this.escDesiredPercent === 0 ? 'neutral' : 'reverse';
+      this.queueEscPercent(this.escDesiredPercent, true, timestamp);
+    }
+  }
+
+  private cancelBrakePulse(): void {
+    if (typeof window !== 'undefined' && this.brakePulseTimer != null) {
+      window.clearTimeout(this.brakePulseTimer);
+      this.brakePulseTimer = undefined;
+    }
+    if (this.escState === 'brakePulse') {
+      this.escState = 'neutral';
+    }
+  }
+
+  private queueEscPercent(percent: number, force = false, timestamp?: number): void {
+    const clampedPercent = Math.round(this.clamp(percent, -100, 100));
+    const angle = this.escPercentToAngle(clampedPercent);
+
+    if (!force && !this.escUpdatePending && angle === this.lastEscAngleSent && clampedPercent === this.escLastCommandPercent) {
+      return;
+    }
+
+    this.escPendingPercent = clampedPercent;
+    this.escPendingAngle = angle;
+    this.escUpdatePending = true;
+
+    if (force) {
+      this.flushEscUpdates(timestamp ?? this.getTimestamp(), true);
+    }
+  }
+
+  private flushEscUpdates(timestamp: number, force = false): void {
+    if (!this.escUpdatePending && !force) {
+      return;
+    }
+
+    if (!force && timestamp - this.lastEscPushTimestamp < this.escUpdateIntervalMs) {
+      return;
+    }
+
+    const angle = this.escPendingAngle;
+    if (!force && angle === this.lastEscAngleSent) {
+      this.escUpdatePending = false;
+      return;
+    }
+
+    this.sendServoUpdate(this.escChannel, angle);
+    this.lastEscPushTimestamp = timestamp;
+    this.lastEscAngleSent = angle;
+    this.escLastCommandPercent = this.escPendingPercent;
+    this.escUpdatePending = false;
+  }
+
+  private escPercentToAngle(percent: number): number {
+    const normalized = this.clamp(percent / 100, -1, 1);
+    return Math.round(this.escNeutralDegrees + normalized * this.escFullScaleDegrees);
   }
 
   private advanceDisplayProfile(): void {

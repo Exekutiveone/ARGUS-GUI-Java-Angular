@@ -1,3 +1,4 @@
+Kanal  3 : ESC (Fahrtenregler)
 Kanal  1 : Vorderlenkung
 Kanal  2 : Hinterlenkung
 Kanal  8 : LiDAR-Schwenkmodul
