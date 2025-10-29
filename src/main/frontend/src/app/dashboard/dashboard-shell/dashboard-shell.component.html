@@ -38,6 +38,28 @@
       ></app-camera>
     </section>
 
+    <section class="panel sensor_graphs">
+      <header class="sensor_graphs__header">
+        <h2>Data</h2>
+        <span>Sensordaten</span>
+      </header>
+      <div class="sensor_graphs__charts">
+        <div class="chart">
+          <header>
+            <h3>Temperatur</h3>
+          </header>
+          <canvas #sensorTemperatureCanvas></canvas>
+        </div>
+        <div class="chart">
+          <header>
+            <h3>Accelerometer</h3>
+            <span>X · Y · Z</span>
+          </header>
+          <canvas #sensorAccelerometerCanvas></canvas>
+        </div>
+      </div>
+    </section>
+
     <section class="panel tasks">
       <div class="tasks-switch">
         <label for="tasks-select">Ansicht</label>
@@ -135,5 +157,3 @@
 <ng-template #cameraFallback>
   <div class="camera-placeholder">Kamerafeeds werden geladen…</div>
 </ng-template>
-
-

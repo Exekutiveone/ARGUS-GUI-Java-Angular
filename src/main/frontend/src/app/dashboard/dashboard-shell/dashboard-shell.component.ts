@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Subscription } from 'rxjs';
 
 import { AuthService } from '../../services/auth.service';
@@ -10,13 +10,15 @@ import { CameraFeed } from '../../components/camera/camera.component';
 import { Orientation } from '../../components/car-model/car-model.component';
 import { TaskItem } from '../../components/tasks/tasks.component';
 import { DeviceHostService } from '../../services/device-host.service';
+import Chart from 'chart.js/auto';
+import type { ChartOptions } from 'chart.js';
 
 @Component({
   selector: 'app-dashboard-shell',
   templateUrl: './dashboard-shell.component.html',
   styleUrls: ['./dashboard-shell.component.scss'],
 })
-export class DashboardShellComponent implements OnInit, OnDestroy {
+export class DashboardShellComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly driveModes = ['Eco', 'Normal', 'Boost'];
   readonly steeringModes = ['2WD', '4WD'];
   readonly tasks: TaskItem[] = [
@@ -53,6 +55,15 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
   pendingHost = '';
   sweepModeLabel = 'Schwenk XY';
   sweepModeBadge = 'Schwenk XY';
+
+  @ViewChild('sensorTemperatureCanvas') private readonly sensorTemperatureCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('sensorAccelerometerCanvas') private readonly sensorAccelerometerCanvas?: ElementRef<HTMLCanvasElement>;
+
+  private sensorTemperatureChart?: Chart<'line'>;
+  private sensorAccelerometerChart?: Chart<'line'>;
+
+  private readonly syntheticSensorTemperatureSeries = this.buildSensorTemperatureSeries();
+  private readonly syntheticSensorAccelerometerSeries = this.buildSensorAccelerometerSeries();
 
   private telemetrySub?: Subscription;
   private feedsSub?: Subscription;
@@ -167,12 +178,17 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
       this.telemetry = snapshot;
       this.heading = snapshot.heading;
       this.orientation = { ...snapshot.orientation };
+      setTimeout(() => this.initSensorGraphs());
     });
 
     this.initialiseSweepServos();
     this.initialiseSteeringServos();
     this.initialiseEsc();
     this.startGamepadPolling();
+  }
+
+  ngAfterViewInit(): void {
+    this.initSensorGraphs();
   }
 
   ngOnDestroy(): void {
@@ -184,6 +200,8 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     if (this.gamepadHandle) {
       cancelAnimationFrame(this.gamepadHandle);
     }
+    this.sensorTemperatureChart?.destroy();
+    this.sensorAccelerometerChart?.destroy();
     this.telemetryService.disconnect();
   }
 
@@ -987,11 +1005,182 @@ export class DashboardShellComponent implements OnInit, OnDestroy {
     this.lastCameraVector = { x: effectiveX, y: effectiveY };
     this.controlService.sendCameraVector(effectiveX, effectiveY);
   }
+
+  private initSensorGraphs(): void {
+    if (this.sensorTemperatureCanvas && !this.sensorTemperatureChart) {
+      this.sensorTemperatureChart = new Chart(this.sensorTemperatureCanvas.nativeElement.getContext('2d')!, {
+        type: 'line',
+        data: {
+          labels: this.generateLabels(this.syntheticSensorTemperatureSeries.length),
+          datasets: [
+            {
+              label: 'Innenraum',
+              data: this.syntheticSensorTemperatureSeries,
+              borderColor: '#fcb040',
+              backgroundColor: 'rgba(252, 176, 64, 0.16)',
+              pointRadius: 0,
+              tension: 0.32,
+              fill: true,
+            },
+          ],
+        },
+        options: this.sensorTemperatureChartOptions,
+      });
+    }
+
+    if (this.sensorAccelerometerCanvas && !this.sensorAccelerometerChart) {
+      const labels = this.generateLabels(this.syntheticSensorAccelerometerSeries.x.length);
+      this.sensorAccelerometerChart = new Chart(this.sensorAccelerometerCanvas.nativeElement.getContext('2d')!, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'X-Achse',
+              data: this.syntheticSensorAccelerometerSeries.x,
+              borderColor: '#ff6b6b',
+              backgroundColor: 'rgba(255, 107, 107, 0.12)',
+              pointRadius: 0,
+              tension: 0.3,
+              fill: false,
+            },
+            {
+              label: 'Y-Achse',
+              data: this.syntheticSensorAccelerometerSeries.y,
+              borderColor: '#32d296',
+              backgroundColor: 'rgba(50, 210, 150, 0.12)',
+              pointRadius: 0,
+              tension: 0.3,
+              fill: false,
+            },
+            {
+              label: 'Z-Achse',
+              data: this.syntheticSensorAccelerometerSeries.z,
+              borderColor: '#487eb0',
+              backgroundColor: 'rgba(72, 126, 176, 0.12)',
+              pointRadius: 0,
+              tension: 0.3,
+              fill: false,
+            },
+          ],
+        },
+        options: this.sensorAccelerometerChartOptions,
+      });
+    }
+  }
+
+  private generateLabels(length: number): string[] {
+    return Array.from({ length }, (_, index) => `${index + 1}`);
+  }
+
+  private get sensorTemperatureChartOptions(): ChartOptions<'line'> {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          ticks: { display: false },
+          grid: { display: false },
+        },
+        y: {
+          min: 0,
+          max: 80,
+          ticks: {
+            stepSize: 10,
+            color: 'rgba(224, 224, 224, 0.6)',
+            font: { size: 11 },
+          },
+          grid: {
+            color: 'rgba(224, 224, 224, 0.08)',
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          backgroundColor: 'rgba(18, 18, 18, 0.9)',
+          borderColor: 'rgba(224, 224, 224, 0.08)',
+          borderWidth: 1,
+          titleColor: '#e0e0e0',
+          bodyColor: '#e0e0e0',
+        },
+      },
+    };
+  }
+
+  private get sensorAccelerometerChartOptions(): ChartOptions<'line'> {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          ticks: { display: false },
+          grid: { display: false },
+        },
+        y: {
+          min: -3.5,
+          max: 3.5,
+          ticks: {
+            stepSize: 1,
+            color: 'rgba(224, 224, 224, 0.6)',
+            font: { size: 11 },
+          },
+          grid: {
+            color: 'rgba(224, 224, 224, 0.08)',
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: 'rgba(224, 224, 224, 0.8)',
+            usePointStyle: true,
+          },
+        },
+        tooltip: {
+          backgroundColor: 'rgba(18, 18, 18, 0.9)',
+          borderColor: 'rgba(224, 224, 224, 0.08)',
+          borderWidth: 1,
+          titleColor: '#e0e0e0',
+          bodyColor: '#e0e0e0',
+        },
+      },
+    };
+  }
+
+  private buildSensorTemperatureSeries(): number[] {
+    const length = 36;
+    const base = 24;
+    return Array.from({ length }, (_, index) => {
+      const seasonal = Math.sin(index / 5) * 3;
+      const drift = index > length / 2 ? 0.4 : -0.4;
+      const noise = (Math.random() - 0.5) * 1.2;
+      const value = base + seasonal + drift + noise;
+      return Number(Math.max(0, value).toFixed(1));
+    });
+  }
+
+  private buildSensorAccelerometerSeries(): { x: number[]; y: number[]; z: number[] } {
+    const length = 48;
+    const x: number[] = [];
+    const y: number[] = [];
+    const z: number[] = [];
+
+    for (let index = 0; index < length; index += 1) {
+      const time = index / 6;
+      const noise = () => (Math.random() - 0.5) * 0.25;
+
+      x.push(Number((Math.sin(time) * 1.6 + noise()).toFixed(2)));
+      y.push(Number((Math.cos(time * 0.9) * 1.2 + noise()).toFixed(2)));
+      z.push(Number((Math.sin(time * 1.2) * 0.8 + noise()).toFixed(2)));
+    }
+
+    return { x, y, z };
+  }
 }
-
-
-
-
 
 
 
